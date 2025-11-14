@@ -1,0 +1,2 @@
+[console_scripts]
+neurocode = neurocode.cli:main

@@ -1,0 +1,65 @@
+# NeuroCode
+
+NeuroCode is an engine for structural understanding and modification of codebases, built around a Neural Intermediate Representation (Neural IR). It is **infrastructure for AI applied to code**, not an IDE, assistant, or AI terminal.
+
+The goal is to let AI models reason about a codebase like a senior engineer with a global view of structure, dependencies, and behavior — not like a text-only LLM reading files in isolation.
+
+## Vision
+
+Traditional LLM-based coding tools:
+
+- read code as plain text, not as structured programs
+- lose global context across large repositories
+- do not truly understand dependency graphs
+- often produce fragile, local patches
+- struggle with multi-file refactors
+- cannot reliably find complex bugs involving control/data flow or cross-module effects
+
+NeuroCode introduces a **neural IR layer for code** that:
+
+- represents the codebase as rich program structure
+- is optimized for AI reasoning
+- enables globally coherent patches and refactors
+
+## Core Concepts
+
+NeuroCode builds and operates on a stack of representations:
+
+- **AST per file** – syntactic structure of each source file
+- **Call graph** – functions/methods and their invocation relationships
+- **Module dependency graph** – imports and higher-level coupling
+- **Control-flow graph (CFG)** – possible execution paths
+- **Data-flow** – value propagation and usage
+- **Neural IR** – a compressed, structured representation suitable as input to LLMs and other models
+
+On top of this IR, NeuroCode will support:
+
+- detection of complex, non-local bugs
+- generation of globally coherent patches
+- real refactoring (including multi-file refactors in later versions)
+- API upgrades and internal interface evolution
+- intelligent test generation
+
+## High-Level Architecture
+
+```text
+CODEBASE
+  ↓
+AST / CFG / CALL GRAPH / DATA FLOW
+  ↓
+NEURAL IR
+  ↓
+LLM REASONING (IR-informed)
+  ↓
+CHECKS / ANALYSIS / PATCH GENERATION
+  ↓
+CLI / API / Editor Plugin
+```
+
+## Non-Goals
+
+- NeuroCode is **not** a GUI-first tool.
+- NeuroCode is **not** a general-purpose chatbot.
+- NeuroCode is **not** tied to a single LLM provider or model.
+
+Instead, it aims to be **the infrastructure layer** that other agents, IDEs, and tools can build on to gain deep, structural understanding of code.
