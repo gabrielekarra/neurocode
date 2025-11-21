@@ -17,12 +17,37 @@ def test_toon_roundtrip_preserves_structure(sample_repo: Path, tmp_path: Path) -
     parsed = load_repository_ir(toon_path)
 
     assert parsed.num_modules == ir.num_modules
+    assert parsed.num_classes == ir.num_classes
     assert parsed.num_functions == ir.num_functions
     assert parsed.num_calls == ir.num_calls
 
     parsed_modules = {(m.module_name, m.path) for m in parsed.modules}
     original_modules = {(m.module_name, m.path) for m in ir.modules}
     assert parsed_modules == original_modules
+
+    parsed_classes = {
+        (module.module_name, cls.name, cls.qualified_name)
+        for module in parsed.modules
+        for cls in module.classes
+    }
+    original_classes = {
+        (module.module_name, cls.name, cls.qualified_name)
+        for module in ir.modules
+        for cls in module.classes
+    }
+    assert parsed_classes == original_classes
+
+    parsed_class_bases = {
+        (module.module_name, cls.name, tuple(cls.base_names))
+        for module in parsed.modules
+        for cls in module.classes
+    }
+    original_class_bases = {
+        (module.module_name, cls.name, tuple(cls.base_names))
+        for module in ir.modules
+        for cls in module.classes
+    }
+    assert parsed_class_bases == original_class_bases
 
     parsed_imports = {
         (

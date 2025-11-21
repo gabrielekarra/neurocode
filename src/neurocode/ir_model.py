@@ -54,7 +54,22 @@ class FunctionIR:
     name: str
     qualified_name: str
     lineno: int
+    parent_class_id: int | None = None
+    parent_class_qualified_name: str | None = None
     calls: List[CallIR] = field(default_factory=list)
+
+
+@dataclass
+class ClassIR:
+    """Represents a class defined within a module."""
+
+    id: int
+    module_id: int
+    name: str
+    qualified_name: str
+    lineno: int
+    base_names: List[str] = field(default_factory=list)
+    methods: List[FunctionIR] = field(default_factory=list)
 
 
 @dataclass
@@ -64,6 +79,7 @@ class ModuleIR:
     id: int
     path: Path  # path relative to the repository root
     module_name: str
+    classes: List[ClassIR] = field(default_factory=list)
     imports: List[ImportIR] = field(default_factory=list)
     functions: List[FunctionIR] = field(default_factory=list)
 
@@ -85,6 +101,10 @@ class RepositoryIR:
     @property
     def num_modules(self) -> int:
         return len(self.modules)
+
+    @property
+    def num_classes(self) -> int:
+        return sum(len(m.classes) for m in self.modules)
 
     @property
     def num_functions(self) -> int:

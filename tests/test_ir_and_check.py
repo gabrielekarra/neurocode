@@ -10,10 +10,11 @@ def test_build_repository_ir_captures_structure(sample_repo: Path) -> None:
     ir = build_repository_ir(sample_repo)
 
     module_names = {m.module_name for m in ir.modules}
-    assert module_names == {"package.mod_a", "package.mod_b"}
+    assert module_names == {"package.mod_a", "package.mod_b", "package.classy"}
 
     mod_a = next(m for m in ir.modules if m.module_name == "package.mod_a")
     mod_b = next(m for m in ir.modules if m.module_name == "package.mod_b")
+    classy = next(m for m in ir.modules if m.module_name == "package.classy")
 
     assert len(mod_a.functions) >= 13
     orchestrator = next(fn for fn in mod_a.functions if fn.name == "orchestrator")
@@ -50,6 +51,36 @@ def test_build_repository_ir_captures_structure(sample_repo: Path) -> None:
         if edge.caller_function_id == orchestrator.id and edge.callee_function_id is None
     }
     assert any(target.startswith("math.") for target in unresolved_targets)
+
+    processor_class = next(cls for cls in classy.classes if cls.name == "Processor")
+    derived_class = next(cls for cls in classy.classes if cls.name == "Derived")
+    processor_add = next(
+        fn for fn in classy.functions if fn.qualified_name.endswith("Processor.add")
+    )
+    processor_compute = next(
+        fn for fn in classy.functions if fn.qualified_name.endswith("Processor._compute")
+    )
+    derived_add = next(
+        fn for fn in classy.functions if fn.qualified_name.endswith("Derived.add")
+    )
+
+    assert processor_add.parent_class_id == processor_class.id
+    assert derived_add.parent_class_id == derived_class.id
+    assert "Processor" in derived_class.base_names
+
+    processor_edges = {
+        edge.callee_function_id
+        for edge in ir.call_edges
+        if edge.caller_function_id == processor_add.id
+    }
+    assert processor_compute.id in processor_edges
+
+    derived_edges = {
+        edge.callee_function_id
+        for edge in ir.call_edges
+        if edge.caller_function_id == derived_add.id
+    }
+    assert processor_compute.id in derived_edges
 
 
 def test_check_file_surfaces_unused_imports_dead_code_and_fanout(sample_repo: Path) -> None:

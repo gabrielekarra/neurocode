@@ -6,6 +6,7 @@ from typing import Dict, List
 from .ir_model import (
     CallEdgeIR,
     CallIR,
+    ClassIR,
     FunctionIR,
     ImportIR,
     ModuleImportEdgeIR,
@@ -151,6 +152,31 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         modules.append(module)
         modules_by_id[module_id] = module
 
+    # Reconstruct classes -------------------------------------------------
+
+    classes_table = tables.get("classes", [])
+    classes_by_id: Dict[int, ClassIR] = {}
+
+    for row in classes_table:
+        class_id = int(row["class_id"])
+        module_id = int(row["module_id"])
+        module = modules_by_id[module_id]
+        name = _unescape_value(row["name"])
+        qualified_name = _unescape_value(row["qualified_name"])
+        lineno = int(row["lineno"])
+        base_names_raw = _unescape_value(row.get("base_names", ""))
+        base_names = [value for value in base_names_raw.split("|") if value]
+        cls = ClassIR(
+            id=class_id,
+            module_id=module_id,
+            name=name,
+            qualified_name=qualified_name,
+            lineno=lineno,
+            base_names=base_names,
+        )
+        module.classes.append(cls)
+        classes_by_id[class_id] = cls
+
     # Reconstruct imports -------------------------------------------------
 
     imports_table = tables.get("imports", [])
@@ -183,14 +209,25 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         qualified_name = _unescape_value(row["qualified_name"])
         lineno = int(row["lineno"])
 
+        parent_class_raw = row.get("parent_class_id", "")
+        parent_class_id = int(parent_class_raw) if parent_class_raw not in {"", None} else None
+        parent_class_qual = _unescape_value(row.get("parent_class_qualified_name", ""))
+        parent_class_qualified_name = parent_class_qual or None
+
         fn = FunctionIR(
             id=function_id,
             module_id=module_id,
             name=name,
             qualified_name=qualified_name,
             lineno=lineno,
+            parent_class_id=parent_class_id,
+            parent_class_qualified_name=parent_class_qualified_name,
         )
         module.functions.append(fn)
+        if parent_class_id is not None:
+            cls = classes_by_id.get(parent_class_id)
+            if cls is not None:
+                cls.methods.append(fn)
         functions_by_id[function_id] = fn
 
     # Reconstruct call sites ----------------------------------------------

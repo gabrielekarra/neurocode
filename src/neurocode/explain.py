@@ -109,15 +109,57 @@ def explain_file(ir: RepositoryIR, repo_root: Path, file: Path) -> str:
         lines.append("  (none)")
     lines.append("")
 
-    # Functions and outbound calls.
+    def _append_function_section(fn: FunctionIR) -> None:
+        lines.append(f"    * {fn.qualified_name} (line {fn.lineno})")
+        call_edges = [
+            edge for edge in ir.call_edges if edge.caller_function_id == fn.id
+        ]
+        if not call_edges:
+            lines.append("        calls: (none)")
+            return
+
+        lines.append("        calls:")
+        for edge in sorted(call_edges, key=lambda e: e.lineno):
+            callee_desc: str
+            if edge.callee_function_id is not None:
+                callee_fn = fn_by_id.get(edge.callee_function_id)
+                if callee_fn is not None:
+                    callee_desc = f" -> {callee_fn.qualified_name}"
+                else:  # pragma: no cover - very defensive
+                    callee_desc = ""
+            else:
+                callee_desc = ""
+            lines.append(
+                f"          line {edge.lineno}: {edge.target}{callee_desc}"
+            )
+
+    # Classes and methods.
+    lines.append("Classes:")
+    if module.classes:
+        for cls in sorted(module.classes, key=lambda c: c.lineno):
+            lines.append(f"- {cls.qualified_name} (line {cls.lineno})")
+            methods = sorted(cls.methods, key=lambda f: f.lineno)
+            if not methods:
+                lines.append("    methods: (none)")
+                continue
+            for method in methods:
+                _append_function_section(method)
+    else:
+        lines.append("  (none)")
+
+    lines.append("")
+
+    # Module-level functions.
+    module_level_functions = [
+        fn for fn in module.functions if fn.parent_class_id is None
+    ]
     lines.append("Functions:")
-    if not module.functions:
+    if not module_level_functions:
         lines.append("  (none)")
         return "\n".join(lines)
 
-    for fn in sorted(module.functions, key=lambda f: f.lineno):
+    for fn in sorted(module_level_functions, key=lambda f: f.lineno):
         lines.append(f"- {fn.qualified_name} (line {fn.lineno})")
-
         call_edges = [
             edge
             for edge in ir.call_edges

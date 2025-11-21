@@ -38,6 +38,7 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
     lines.append("repo:")
     lines.append(f"  root: {root}")
     lines.append(f"  num_modules: {ir.num_modules}")
+    lines.append(f"  num_classes: {ir.num_classes}")
     lines.append(f"  num_functions: {ir.num_functions}")
     lines.append(f"  num_calls: {ir.num_calls}")
     lines.append("")
@@ -58,6 +59,30 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
                 _escape_value(path_str),
                 str(len(module.functions)),
                 str(len(module.imports)),
+            ]
+        )
+        lines.append(f"  {row}")
+    lines.append("")
+
+    # Classes table -------------------------------------------------------
+
+    all_classes = [cls for module in ir.modules for cls in module.classes]
+    lines.append(
+        "classes[{n}]{{class_id,module_id,name,qualified_name,lineno,base_names,num_methods}}:".format(
+            n=len(all_classes)
+        )
+    )
+    for cls in all_classes:
+        base_names = "|".join(cls.base_names)
+        row = ",".join(
+            [
+                str(cls.id),
+                str(cls.module_id),
+                _escape_value(cls.name),
+                _escape_value(cls.qualified_name),
+                str(cls.lineno),
+                _escape_value(base_names),
+                str(len(cls.methods)),
             ]
         )
         lines.append(f"  {row}")
@@ -92,11 +117,13 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
 
     all_functions = [fn for m in ir.modules for fn in m.functions]
     lines.append(
-        "functions[{n}]{{function_id,module_id,name,qualified_name,lineno,num_calls}}:".format(
+        "functions[{n}]{{function_id,module_id,name,qualified_name,lineno,parent_class_id,parent_class_qualified_name,num_calls}}:".format(
             n=len(all_functions)
         )
     )
     for fn in all_functions:
+        parent_class_id = "" if fn.parent_class_id is None else str(fn.parent_class_id)
+        parent_class_name = _escape_value(fn.parent_class_qualified_name or "")
         row = ",".join(
             [
                 str(fn.id),
@@ -104,6 +131,8 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
                 _escape_value(fn.name),
                 _escape_value(fn.qualified_name),
                 str(fn.lineno),
+                parent_class_id,
+                parent_class_name,
                 str(len(fn.calls)),
             ]
         )
