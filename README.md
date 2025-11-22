@@ -59,27 +59,37 @@ neurocode ir .
 neurocode ir . --check   # warns if any module hash is stale
 ```
 
-Explain a file as JSON:
+Apply a patch with a logging stub:
 ```bash
-neurocode explain src/neurocode/cli.py --format json | jq .
+neurocode patch src/neurocode/cli.py --fix "trace entry" \
+  --strategy inject --inject-kind log --inject-message "enter cli"
 ```
 
-Run checks with custom config:
+Quickstart workflow (sample repo):
+```bash
+# 1) Build IR
+neurocode ir .
+
+# 2) Check freshness + config
+neurocode status . --format json | jq .
+
+# 3) Run checks with JSON output
+neurocode check path/to/file.py --format json --status
+
+# 4) Explain a file
+neurocode explain path/to/file.py --format json | jq .
+
+# 5) Apply a patch (dry-run JSON)
+neurocode patch path/to/file.py --fix "describe fix" --strategy guard --dry-run --format json --show-diff
+```
+
+Custom config example:
 ```toml
 # .neurocoderc or pyproject.toml [tool.neurocode]
 fanout_threshold = 20
 long_function_threshold = 80
 enabled_checks = ["UNUSED_IMPORT", "UNUSED_PARAM", "LONG_FUNCTION"]
 severity_overrides = { UNUSED_FUNCTION = "WARNING" }
-```
-```bash
-neurocode check src/neurocode/check.py --format json
-```
-
-Apply a patch with a logging stub:
-```bash
-neurocode patch src/neurocode/cli.py --fix "trace entry" \
-  --strategy inject --inject-kind log --inject-message "enter cli"
 ```
 
 ## Configuration

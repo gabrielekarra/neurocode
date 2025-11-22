@@ -19,6 +19,11 @@ def main() -> None:
             "reasoning over codebases."
         ),
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="neurocode %(prog)s",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
