@@ -56,6 +56,11 @@ def main() -> None:
         default="text",
         help="Output format (default: text)",
     )
+    check_parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Print a one-line machine-readable status (exit code still reflects severity)",
+    )
 
     patch_parser = subparsers.add_parser(
         "patch", help="Apply an IR-informed patch to a Python file"
@@ -170,12 +175,16 @@ def main() -> None:
     elif args.command == "check":
         file_path = Path(args.file).resolve()
         try:
-            output, exit_code = check_file_from_disk(file_path, output_format=args.format)
+            output, exit_code, status = check_file_from_disk(
+                file_path, output_format=args.format, return_status=True
+            )
         except RuntimeError as exc:
             print(f"[neurocode] error: {exc}", file=sys.stderr)
             sys.exit(1)
 
         print(output)
+        if args.status:
+            print(status)
         sys.exit(exit_code)
     elif args.command == "patch":
         file_path = Path(args.file).resolve()

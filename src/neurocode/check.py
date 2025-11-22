@@ -28,7 +28,11 @@ class CheckResult:
     lineno: int | None = None
 
 
-def check_file_from_disk(file: Path, output_format: str = "text") -> tuple[str, int]:
+def check_file_from_disk(
+    file: Path,
+    output_format: str = "text",
+    return_status: bool = False,
+) -> tuple[str, int] | tuple[str, int, str]:
     """Run structural checks for the module that owns ``file``.
 
     This is the entrypoint used by the CLI. It locates `.neurocode/ir.toon`
@@ -55,7 +59,11 @@ def check_file_from_disk(file: Path, output_format: str = "text") -> tuple[str, 
     results = check_file(ir=ir, repo_root=repo_root, file=file, config=config)
     warning = _staleness_warning(module, repo_root)
     warnings = [warning] if warning else []
-    return _render_results(results, output_format=output_format, warnings=warnings)
+    rendered, exit_code = _render_results(results, output_format=output_format, warnings=warnings)
+    status = _build_status(results, warnings, exit_code)
+    if return_status:
+        return rendered, exit_code, status
+    return rendered, exit_code
 
 
 def check_file(ir: RepositoryIR, repo_root: Path, file: Path, config: Config | None = None) -> List[CheckResult]:
@@ -291,6 +299,19 @@ def _render_results(results: List[CheckResult], output_format: str = "text", war
     if warnings:
         lines = [f"[neurocode] warning: {w}" for w in warnings] + lines
     return "\n".join(lines), exit_code
+
+
+def _build_status(results: List[CheckResult], warnings: List[str], exit_code: int) -> str:
+    """Return a one-line status for automation."""
+
+    warning_count = len(warnings)
+    counts = {"INFO": 0, "WARNING": 0, "ERROR": 0}
+    for r in results:
+        counts[r.severity.upper()] = counts.get(r.severity.upper(), 0) + 1
+    return (
+        f"status exit_code={exit_code} warnings={warning_count} "
+        f"info={counts.get('INFO',0)} warn={counts.get('WARNING',0)} error={counts.get('ERROR',0)}"
+    )
 
 
 def _staleness_warning(module: ModuleIR, repo_root: Path) -> str | None:

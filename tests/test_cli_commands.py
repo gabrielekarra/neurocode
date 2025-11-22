@@ -77,6 +77,14 @@ def test_cli_check_json_format(repo_with_ir: Path, project_root: Path) -> None:
     assert "UNUSED_IMPORT" in result.stdout
 
 
+def test_cli_check_status_line(repo_with_ir: Path, project_root: Path) -> None:
+    target_file = repo_with_ir / "package" / "mod_a.py"
+    result = _run_cli(project_root, "check", str(target_file), "--status")
+
+    assert result.returncode == 1, result.stdout
+    assert "status exit_code=1" in result.stdout
+
+
 def test_cli_ir_check_detects_stale(sample_repo: Path, project_root: Path) -> None:
     # Build IR first.
     build_result = _run_cli(project_root, "ir", str(sample_repo))
