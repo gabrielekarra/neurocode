@@ -409,7 +409,8 @@ def _build_status(results: List[CheckResult], warnings: List[str], exit_code: in
         counts[r.severity.upper()] = counts.get(r.severity.upper(), 0) + 1
     return (
         f"status exit_code={exit_code} warnings={warning_count} "
-        f"info={counts.get('INFO',0)} warn={counts.get('WARNING',0)} error={counts.get('ERROR',0)}"
+        f"info={counts.get('INFO',0)} warn={counts.get('WARNING',0)} "
+        f"error={counts.get('ERROR',0)}"
     )
 
 

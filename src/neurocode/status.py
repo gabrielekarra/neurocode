@@ -44,7 +44,10 @@ def status_from_disk(root: Path, output_format: str = "text") -> Tuple[str, int]
     root = root.resolve()
     ir_file = root / ".neurocode" / "ir.toon"
     if not ir_file.is_file():
-        msg = f"[neurocode] error: {ir_file} not found. Run `neurocode ir {root}` first."
+        msg = (
+            f"[neurocode] error: {ir_file} not found. "
+            f"Run `neurocode ir {root}` first."
+        )
         return msg, 1
 
     ir = load_repository_ir(ir_file)

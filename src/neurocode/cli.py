@@ -155,7 +155,12 @@ def main() -> None:
         if args.check:
             ir_file = repo_path / ".neurocode" / "ir.toon"
             if not ir_file.exists():
-                print(f"[neurocode] error: {ir_file} does not exist; run `neurocode ir {repo_path}` first.", file=sys.stderr)
+                print(
+                    "[neurocode] error: {ir_file} does not exist; run `neurocode ir {repo}` first.".format(
+                        ir_file=ir_file, repo=repo_path
+                    ),
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             repo_ir = load_repository_ir(ir_file)
             stale: list[str] = []
@@ -232,7 +237,6 @@ def main() -> None:
             print(f"[neurocode] error: {exc}", file=sys.stderr)
             sys.exit(1)
 
-        target = result.target_function or "file"
         action = "Planned" if args.dry_run else "Applied"
         for warn in result.warnings:
             print(f"[neurocode] warning: {warn}", file=sys.stderr)
