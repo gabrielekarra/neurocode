@@ -98,6 +98,27 @@ def test_cli_patch_inject_strategy(repo_with_ir: Path, project_root: Path) -> No
     assert "NotImplementedError(\"neurocode inject: inject stub\")" in contents
 
 
+def test_cli_patch_json_output(repo_with_ir: Path, project_root: Path) -> None:
+    target_file = repo_with_ir / "package" / "mod_b.py"
+    fix_description = "json output"
+
+    result = _run_cli(
+        project_root,
+        "patch",
+        str(target_file),
+        "--fix",
+        fix_description,
+        "--strategy",
+        "guard",
+        "--format",
+        "json",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().startswith("{")
+    assert "status" in result.stdout
+
+
 def test_cli_patch_noop_exit_code(repo_with_ir: Path, project_root: Path) -> None:
     target_file = repo_with_ir / "package" / "mod_b.py"
     fix_description = "guard noop"

@@ -113,6 +113,12 @@ def main() -> None:
         action="store_true",
         help="Suppress note when patch was already present",
     )
+    patch_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format for patch result (default: text)",
+    )
 
     status_parser = subparsers.add_parser("status", help="Report IR freshness and config summary")
     status_parser.add_argument(
@@ -223,18 +229,35 @@ def main() -> None:
         action = "Planned" if args.dry_run else "Applied"
         for warn in result.warnings:
             print(f"[neurocode] warning: {warn}", file=sys.stderr)
-        print(
-            "[neurocode] {action} patch to {path}: {detail} (line {line})".format(
-                action=action,
-                path=file_path,
-                detail=result.summary,
-                line=result.inserted_line,
+
+        if args.format == "json":
+            import json
+
+            payload = {
+                "status": result.status,
+                "file": str(result.file),
+                "target_function": result.target_function,
+                "summary": result.summary,
+                "inserted_line": result.inserted_line,
+                "inserted_text": result.inserted_text,
+                "no_change": result.no_change,
+                "warnings": result.warnings,
+                "diff": result.diff if (args.dry_run or args.show_diff) else None,
+            }
+            print(json.dumps(payload, indent=2))
+        else:
+            print(
+                "[neurocode] {action} patch to {path}: {detail} (line {line})".format(
+                    action=action,
+                    path=file_path,
+                    detail=result.summary,
+                    line=result.inserted_line,
+                )
             )
-        )
-        if result.no_change and not args.no_noop_note:
-            print("[neurocode] note: patch already existed; no change applied.")
-        if (args.dry_run or args.show_diff) and result.diff:
-            print(result.diff)
+            if result.no_change and not args.no_noop_note:
+                print("[neurocode] note: patch already existed; no change applied.")
+            if (args.dry_run or args.show_diff) and result.diff:
+                print(result.diff)
         if result.no_change and not args.dry_run:
             sys.exit(3)
     elif args.command == "status":
