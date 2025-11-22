@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import ast
 import hashlib
 import time
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 from .ir_model import (

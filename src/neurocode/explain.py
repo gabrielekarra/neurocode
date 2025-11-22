@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List
 
+from .ir_build import compute_file_hash
 from .ir_model import FunctionIR, ModuleIR, RepositoryIR
 from .toon_parse import load_repository_ir
-from .ir_build import compute_file_hash
 
 
 def _find_repo_root_for_file(file_path: Path) -> Path | None:

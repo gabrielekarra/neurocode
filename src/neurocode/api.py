@@ -3,14 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List
 
-from .check import CheckResult, check_file, check_file_from_disk
+from .check import CheckResult, check_file
 from .config import Config, load_config
 from .explain import explain_file, explain_file_from_disk
 from .ir_build import build_repository_ir
 from .ir_model import RepositoryIR
 from .patch import PatchResult, apply_patch, apply_patch_from_disk
 from .toon_parse import load_repository_ir
-from .toon_serialize import repository_ir_to_toon
 
 __all__ = [
     "load_ir",
