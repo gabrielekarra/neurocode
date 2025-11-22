@@ -49,6 +49,7 @@ On top of this IR, NeuroCode will support:
   - Strategies: `guard`, `todo`, `inject` (NotImplementedError/logging stub).
   - Targeting (`--target`, `--require-target`), inject options (`--inject-kind`, `--inject-message`), dry-run/diff, stale IR enforcement (`--require-fresh-ir`).
   - Idempotent via `# neurocode:*` markers; exit code `3` when no change.
+- `neurocode status [path] [--format text|json]` — summarize IR freshness (hash comparison), build timestamp, and config values in one shot; exit `1` if any module is stale/missing.
 
 ### Examples
 

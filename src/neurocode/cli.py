@@ -8,6 +8,7 @@ from .ir_build import build_repository_ir, compute_file_hash
 from .patch import apply_patch_from_disk
 from .toon_serialize import repository_ir_to_toon
 from .toon_parse import load_repository_ir
+from .status import status_from_disk
 
 
 def main() -> None:
@@ -111,6 +112,20 @@ def main() -> None:
         "--no-noop-note",
         action="store_true",
         help="Suppress note when patch was already present",
+    )
+
+    status_parser = subparsers.add_parser("status", help="Report IR freshness and config summary")
+    status_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Path to the repository (default: current directory)",
+    )
+    status_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
     )
 
     args = parser.parse_args()
@@ -222,6 +237,11 @@ def main() -> None:
             print(result.diff)
         if result.no_change and not args.dry_run:
             sys.exit(3)
+    elif args.command == "status":
+        repo_path = Path(args.path).resolve()
+        output, exit_code = status_from_disk(repo_path, output_format=args.format)
+        print(output)
+        sys.exit(exit_code)
     else:
         parser.error("Unknown command")
 
