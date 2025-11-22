@@ -25,6 +25,7 @@ class PatchResult:
     diff: str | None = None
     warnings: list[str] = field(default_factory=list)
     no_change: bool = False
+    status: str = "applied"  # applied|planned|noop|error
 
 
 def apply_patch_from_disk(
@@ -169,6 +170,7 @@ def apply_patch(
                 diff=diff_text,
                 warnings=warnings,
                 no_change=False,
+                status="planned" if dry_run else "applied",
             )
 
     if strategy == "inject" and target_fn is not None:
@@ -210,6 +212,7 @@ def apply_patch(
                 diff=diff_text,
                 warnings=warnings,
                 no_change=False,
+                status="planned" if dry_run else "applied",
             )
 
     # Fallback: insert a TODO at the top of the file if no guard was added.
@@ -229,6 +232,7 @@ def apply_patch(
                 diff=None,
                 warnings=warnings,
                 no_change=True,
+                status="noop",
             )
     insert_at = 0
     if lines and lines[0].startswith("#!"):

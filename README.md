@@ -48,39 +48,8 @@ On top of this IR, NeuroCode will support:
 - `neurocode patch <file> --fix "..."`
   - Strategies: `guard`, `todo`, `inject` (NotImplementedError/logging stub).
   - Targeting (`--target`, `--require-target`), inject options (`--inject-kind`, `--inject-message`), dry-run/diff, stale IR enforcement (`--require-fresh-ir`).
-  - Idempotent via `# neurocode:*` markers; exit code `3` when no change.
+  - Idempotent via `# neurocode:*` markers; exit code `3` when no change. `--format json` emits structured result (status, diff, warnings).
 - `neurocode status [path] [--format text|json]` — summarize IR freshness (hash comparison), build timestamp, and config values in one shot; exit `1` if any module is stale/missing.
-
-### Examples
-
-Generate IR and check freshness:
-```bash
-neurocode ir .
-neurocode ir . --check   # warns if any module hash is stale
-```
-
-Explain a file as JSON:
-```bash
-neurocode explain src/neurocode/cli.py --format json | jq .
-```
-
-Run checks with custom config:
-```toml
-# .neurocoderc or pyproject.toml [tool.neurocode]
-fanout_threshold = 20
-long_function_threshold = 80
-enabled_checks = ["UNUSED_IMPORT", "UNUSED_PARAM", "LONG_FUNCTION"]
-severity_overrides = { UNUSED_FUNCTION = "WARNING" }
-```
-```bash
-neurocode check src/neurocode/check.py --format json
-```
-
-Apply a patch with a logging stub:
-```bash
-neurocode patch src/neurocode/cli.py --fix "trace entry" \
-  --strategy inject --inject-kind log --inject-message "enter cli"
-```
 
 ### Examples
 
