@@ -18,6 +18,8 @@ class Config:
             "UNUSED_PARAM",
             "LONG_FUNCTION",
             "CALL_CYCLE",
+            "UNUSED_RETURN",
+            "IMPORT_CYCLE",
         }
     )
     severity_overrides: Dict[str, str] = field(default_factory=dict)

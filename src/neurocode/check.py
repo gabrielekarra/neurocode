@@ -91,6 +91,10 @@ def check_file(ir: RepositoryIR, repo_root: Path, file: Path, config: Config | N
         results.extend(_check_long_functions(repo_root, module, file, cfg))
     if "CALL_CYCLE" in cfg.enabled_checks:
         results.extend(_check_call_cycles(ir, module, file, cfg))
+    if "UNUSED_RETURN" in cfg.enabled_checks:
+        results.extend(_check_unused_returns(ir, module, file, cfg))
+    if "IMPORT_CYCLE" in cfg.enabled_checks:
+        results.extend(_check_import_cycles(ir, module, file, cfg))
     return results
 
 
@@ -241,6 +245,101 @@ def _check_call_cycles(
                 module=module.module_name,
                 function=fn.name if fn else None,
                 lineno=lineno,
+            )
+        )
+    return results
+
+
+def _check_import_cycles(
+    ir: RepositoryIR,
+    module: ModuleIR,
+    file: Path,
+    config: Config,
+) -> List[CheckResult]:
+    """Detect import cycles at the module level (simple DFS)."""
+
+    # Build adjacency of module imports.
+    adj: Dict[str, Set[str]] = {}
+    for edge in ir.module_import_edges:
+        importer = next((m.module_name for m in ir.modules if m.id == edge.importer_module_id), None)
+        if importer is None:
+            continue
+        adj.setdefault(importer, set()).add(edge.imported_module)
+
+    visited: Set[str] = set()
+    stack: Set[str] = set()
+    cycles: List[List[str]] = []
+
+    def dfs(node: str, path: List[str]) -> None:
+        if node in stack:
+            idx = path.index(node)
+            cycles.append(path[idx:] + [node])
+            return
+        if node in visited:
+            return
+        visited.add(node)
+        stack.add(node)
+        for nxt in adj.get(node, set()):
+            dfs(nxt, path + [nxt])
+        stack.remove(node)
+
+    dfs(module.module_name, [module.module_name])
+
+    if not cycles:
+        return []
+
+    results: List[CheckResult] = []
+    for cycle in cycles:
+        message = "Import cycle detected: " + " -> ".join(cycle)
+        results.append(
+            CheckResult(
+                code="IMPORT_CYCLE",
+                severity=config.severity_for("IMPORT_CYCLE", "WARNING"),
+                message=message,
+                file=file,
+                module=module.module_name,
+            )
+        )
+    return results
+
+
+def _check_unused_returns(
+    ir: RepositoryIR,
+    module: ModuleIR,
+    file: Path,
+    config: Config,
+) -> List[CheckResult]:
+    """Detect functions whose return values are never used (heuristic)."""
+
+    fn_ids_in_module: Set[int] = {fn.id for fn in module.functions}
+    used_returns: Set[int] = set()
+
+    for edge in ir.call_edges:
+        if edge.callee_function_id is None:
+            continue
+        # If caller is in module and callee is tracked, mark used.
+        if edge.callee_function_id in fn_ids_in_module:
+            used_returns.add(edge.callee_function_id)
+
+    results: List[CheckResult] = []
+    for fn in module.functions:
+        if fn.id in used_returns:
+            continue
+        # Heuristic: skip dunders and tests.
+        if fn.name.startswith("__") and fn.name.endswith("__"):
+            continue
+        if fn.name.startswith("test_"):
+            continue
+        message = f"Return value of {fn.qualified_name} is never used (intra-module heuristic)"
+        results.append(
+            CheckResult(
+                code="UNUSED_RETURN",
+                severity=config.severity_for("UNUSED_RETURN", "INFO"),
+                message=message,
+                file=file,
+                module=module.module_name,
+                function=fn.name,
+                lineno=fn.lineno,
             )
         )
     return results
