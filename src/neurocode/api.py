@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 from .check import CheckResult, check_file, check_file_from_disk
 from .config import Config, load_config
