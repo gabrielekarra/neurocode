@@ -127,6 +127,12 @@ print([r.code for r in results])
 
 The CLI uses the same underlying functions; see `docs/ir.md` for the serialized IR schema.
 
+## Releases
+
+- Version: `0.1.0` (see `CHANGELOG.md`).
+- Build artifacts locally with `scripts/release.sh` (wheel + sdist in `dist/`).
+- CI: GitHub Actions (`.github/workflows/ci.yml`) runs `ruff check` + `pytest` on push/PR.
+
 ## High-Level Architecture
 
 ```text
