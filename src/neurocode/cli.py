@@ -134,20 +134,6 @@ def main() -> None:
         help="Output format (default: text)",
     )
 
-    status_parser = subparsers.add_parser("status", help="Report IR freshness and config summary")
-    status_parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Path to the repository (default: current directory)",
-    )
-    status_parser.add_argument(
-        "--format",
-        choices=["text", "json"],
-        default="text",
-        help="Output format (default: text)",
-    )
-
     args = parser.parse_args()
 
     if args.command == "ir":

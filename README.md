@@ -44,11 +44,11 @@ On top of this IR, NeuroCode will support:
 
 - `neurocode ir <path>` — build IR (`.neurocode/ir.toon`) with per-file hashes and timestamp. `--check` compares hashes to disk and reports staleness without rebuilding.
 - `neurocode explain <file> [--format text|json]` — IR-backed module summary (imports, functions, calls) with staleness warnings.
-- `neurocode check <file> [--format text|json]` — structural diagnostics: unused imports/functions/params, high fan-out, long functions, call cycles. Respects config and staleness warnings.
+- `neurocode check <file> [--format text|json]` — structural diagnostics: unused imports/functions/params, high fan-out, long functions, call cycles, import cycles, unused returns. Respects config and staleness warnings.
 - `neurocode patch <file> --fix "..."`
   - Strategies: `guard`, `todo`, `inject` (NotImplementedError/logging stub).
   - Targeting (`--target`, `--require-target`), inject options (`--inject-kind`, `--inject-message`), dry-run/diff, stale IR enforcement (`--require-fresh-ir`).
-  - Idempotent via `# neurocode:*` markers; exit code `3` when no change. `--format json` emits structured result (status, diff, warnings).
+  - Idempotent via `# neurocode:*` markers; exit code `3` when no change. `--format json` emits structured result (status, diff, warnings, exit_code).
 - `neurocode status [path] [--format text|json]` — summarize IR freshness (hash comparison), build timestamp, and config values in one shot; exit `1` if any module is stale/missing.
 
 ### Examples
