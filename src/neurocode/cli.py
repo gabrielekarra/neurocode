@@ -5,6 +5,7 @@ from pathlib import Path
 from .check import check_file_from_disk
 from .explain import explain_file_from_disk
 from .ir_build import build_repository_ir
+from .patch import apply_patch_from_disk
 from .toon_serialize import repository_ir_to_toon
 
 
@@ -43,6 +44,41 @@ def main() -> None:
     )
     patch_parser.add_argument("file", help="Python file to patch")
     patch_parser.add_argument("--fix", required=True, help="High-level fix description")
+    patch_parser.add_argument(
+        "--strategy",
+        choices=["guard", "todo", "inject"],
+        default="guard",
+        help="Patch strategy: guard inserts a None-check, todo inserts a TODO comment, inject adds a stub (default: guard)",
+    )
+    patch_parser.add_argument(
+        "--target",
+        help="Qualified or simple function name to patch (default: first module-level function)",
+    )
+    patch_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Do not write changes; print the would-be patch summary instead",
+    )
+    patch_parser.add_argument(
+        "--show-diff",
+        action="store_true",
+        help="After applying, print the unified diff of the change",
+    )
+    patch_parser.add_argument(
+        "--require-fresh-ir",
+        action="store_true",
+        help="Fail if .neurocode/ir.toon is older than the target file",
+    )
+    patch_parser.add_argument(
+        "--require-target",
+        action="store_true",
+        help="Fail instead of falling back if no target function can be selected",
+    )
+    patch_parser.add_argument(
+        "--no-noop-note",
+        action="store_true",
+        help="Suppress note when patch was already present",
+    )
 
     args = parser.parse_args()
 
@@ -112,7 +148,39 @@ def main() -> None:
                 exit_code = 1
         sys.exit(exit_code)
     elif args.command == "patch":
-        print("[neurocode] Patch not implemented yet (MVP Phase 5 stub).")
+        file_path = Path(args.file).resolve()
+        try:
+            result = apply_patch_from_disk(
+                file_path,
+                args.fix,
+                strategy=args.strategy,
+                target=args.target,
+                dry_run=args.dry_run,
+                require_fresh_ir=args.require_fresh_ir,
+                require_target=args.require_target,
+            )
+        except RuntimeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        target = result.target_function or "file"
+        action = "Planned" if args.dry_run else "Applied"
+        for warn in result.warnings:
+            print(f"[neurocode] warning: {warn}", file=sys.stderr)
+        print(
+            "[neurocode] {action} patch to {path}: {detail} (line {line})".format(
+                action=action,
+                path=file_path,
+                detail=result.summary,
+                line=result.inserted_line,
+            )
+        )
+        if result.no_change and not args.no_noop_note:
+            print("[neurocode] note: patch already existed; no change applied.")
+        if (args.dry_run or args.show_diff) and result.diff:
+            print(result.diff)
+        if result.no_change and not args.dry_run:
+            sys.exit(3)
     else:
         parser.error("Unknown command")
 

@@ -7,6 +7,7 @@ src/neurocode/cli.py
 src/neurocode/explain.py
 src/neurocode/ir_build.py
 src/neurocode/ir_model.py
+src/neurocode/patch.py
 src/neurocode/toon_parse.py
 src/neurocode/toon_serialize.py
 src/neurocode.egg-info/PKG-INFO
@@ -17,5 +18,6 @@ src/neurocode.egg-info/requires.txt
 src/neurocode.egg-info/top_level.txt
 tests/test_cli_check.py
 tests/test_cli_commands.py
+tests/test_cli_patch.py
 tests/test_ir_and_check.py
 tests/test_toon_roundtrip.py
