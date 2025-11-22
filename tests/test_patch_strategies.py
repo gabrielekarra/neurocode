@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from neurocode.patch import apply_patch
 from neurocode.ir_build import build_repository_ir
+from neurocode.patch import apply_patch
 
 
 def test_todo_strategy_inserts_comment(sample_repo: Path) -> None:
@@ -71,7 +71,7 @@ def test_guard_noop_when_already_present(sample_repo: Path) -> None:
     file_path = sample_repo / "package" / "mod_b.py"
     ir = build_repository_ir(sample_repo)
 
-    first = apply_patch(
+    apply_patch(
         ir=ir,
         repo_root=sample_repo,
         file=file_path,

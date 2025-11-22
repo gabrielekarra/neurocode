@@ -6,9 +6,9 @@ from .check import check_file_from_disk
 from .explain import explain_file_from_disk
 from .ir_build import build_repository_ir, compute_file_hash
 from .patch import apply_patch_from_disk
-from .toon_serialize import repository_ir_to_toon
-from .toon_parse import load_repository_ir
 from .status import status_from_disk
+from .toon_parse import load_repository_ir
+from .toon_serialize import repository_ir_to_toon
 
 
 def main() -> None:
@@ -79,13 +79,19 @@ def main() -> None:
         "--strategy",
         choices=["guard", "todo", "inject"],
         default="guard",
-        help="Patch strategy: guard inserts a None-check, todo inserts a TODO comment, inject adds a stub/log (default: guard)",
+        help=(
+            "Patch strategy: guard inserts a None-check, todo inserts a TODO "
+            "comment, inject adds a stub/log (default: guard)"
+        ),
     )
     patch_parser.add_argument(
         "--inject-kind",
         choices=["notimplemented", "log"],
         default="notimplemented",
-        help="When using --strategy inject, choose stub type: NotImplementedError or logging.debug (default: notimplemented)",
+        help=(
+            "When using --strategy inject, choose stub type: "
+            "NotImplementedError or logging.debug (default: notimplemented)"
+        ),
     )
     patch_parser.add_argument(
         "--inject-message",

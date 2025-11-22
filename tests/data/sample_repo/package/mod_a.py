@@ -1,9 +1,10 @@
+# ruff: noqa
 """Sample module used by the test suite."""
 
 import math
-import statistics  # unused on purpose
+import statistics  # noqa: F401  # unused on purpose
 from package.mod_b import helper_value, run_task
-from package.mod_b import unused_utility
+from package.mod_b import unused_utility  # noqa: F401  # unused on purpose
 
 
 def orchestrator(value: int) -> int:

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Set
-import ast
 
-from .explain import _find_module_for_file, _find_repo_root_for_file
 from .config import Config, load_config
-from .ir_model import FunctionIR, ModuleIR, RepositoryIR
+from .explain import _find_module_for_file, _find_repo_root_for_file
 from .ir_build import compute_file_hash
+from .ir_model import FunctionIR, ModuleIR, RepositoryIR
 from .toon_parse import load_repository_ir
 
 
@@ -43,7 +43,8 @@ def check_file_from_disk(
     repo_root = _find_repo_root_for_file(file)
     if repo_root is None:
         raise RuntimeError(
-            "Could not find .neurocode/ir.toon. Run `neurocode ir` at the repository root first."
+            "Could not find .neurocode/ir.toon. Run `neurocode ir` at the "
+            "repository root first."
         )
 
     ir_file = repo_root / ".neurocode" / "ir.toon"
@@ -59,14 +60,21 @@ def check_file_from_disk(
     results = check_file(ir=ir, repo_root=repo_root, file=file, config=config)
     warning = _staleness_warning(module, repo_root)
     warnings = [warning] if warning else []
-    rendered, exit_code = _render_results(results, output_format=output_format, warnings=warnings)
+    rendered, exit_code = _render_results(
+        results, output_format=output_format, warnings=warnings
+    )
     status = _build_status(results, warnings, exit_code)
     if return_status:
         return rendered, exit_code, status
     return rendered, exit_code
 
 
-def check_file(ir: RepositoryIR, repo_root: Path, file: Path, config: Config | None = None) -> List[CheckResult]:
+def check_file(
+    ir: RepositoryIR,
+    repo_root: Path,
+    file: Path,
+    config: Config | None = None,
+) -> List[CheckResult]:
     """Run structural checks on the module that owns ``file`` using an in-memory IR."""
 
     module = _find_module_for_file(ir, repo_root, file)
@@ -135,7 +143,10 @@ def _check_unused_params(
                     CheckResult(
                         code="UNUSED_PARAM",
                         severity=config.severity_for("UNUSED_PARAM", "INFO"),
-                        message=f"Parameter '{param}' in {module.module_name}.{node.name} is never used",
+                        message=(
+                            f"Parameter '{param}' in {module.module_name}.{node.name} "
+                            "is never used"
+                        ),
                         file=file,
                         module=module.module_name,
                         function=node.name,
@@ -179,7 +190,10 @@ def _check_long_functions(
                 CheckResult(
                     code="LONG_FUNCTION",
                     severity=config.severity_for("LONG_FUNCTION", "INFO"),
-                    message=f"{module.module_name}.{node.name} is {length} lines long (threshold {threshold})",
+                    message=(
+                        f"{module.module_name}.{node.name} is {length} lines long "
+                        f"(threshold {threshold})"
+                    ),
                     file=file,
                     module=module.module_name,
                     function=node.name,
@@ -201,7 +215,10 @@ def _check_call_cycles(
     local_fn_ids: Set[int] = {fn.id for fn in module.functions}
     adj: Dict[int, Set[int]] = {}
     for edge in ir.call_edges:
-        if edge.caller_function_id in local_fn_ids and edge.callee_function_id is not None:
+        if (
+            edge.caller_function_id in local_fn_ids
+            and edge.callee_function_id is not None
+        ):
             adj.setdefault(edge.caller_function_id, set()).add(edge.callee_function_id)
 
     visited: Set[int] = set()
@@ -261,7 +278,10 @@ def _check_import_cycles(
     # Build adjacency of module imports.
     adj: Dict[str, Set[str]] = {}
     for edge in ir.module_import_edges:
-        importer = next((m.module_name for m in ir.modules if m.id == edge.importer_module_id), None)
+        importer = next(
+            (m.module_name for m in ir.modules if m.id == edge.importer_module_id),
+            None,
+        )
         if importer is None:
             continue
         adj.setdefault(importer, set()).add(edge.imported_module)
@@ -330,7 +350,10 @@ def _check_unused_returns(
             continue
         if fn.name.startswith("test_"):
             continue
-        message = f"Return value of {fn.qualified_name} is never used (intra-module heuristic)"
+        message = (
+            f"Return value of {fn.qualified_name} is never used "
+            "(intra-module heuristic)"
+        )
         results.append(
             CheckResult(
                 code="UNUSED_RETURN",
@@ -345,7 +368,11 @@ def _check_unused_returns(
     return results
 
 
-def _render_results(results: List[CheckResult], output_format: str = "text", warnings: List[str] | None = None) -> tuple[str, int]:
+def _render_results(
+    results: List[CheckResult],
+    output_format: str = "text",
+    warnings: List[str] | None = None,
+) -> tuple[str, int]:
     warnings = warnings or []
     if output_format == "json":
         import json
@@ -372,7 +399,10 @@ def _render_results(results: List[CheckResult], output_format: str = "text", war
 
     if not results:
         if warnings:
-            return "\n".join(f"[neurocode] warning: {w}" for w in warnings) + "\n[neurocode] No issues found.", 0
+            return (
+                "\n".join(f"[neurocode] warning: {w}" for w in warnings)
+                + "\n[neurocode] No issues found."
+            ), 0
         return "[neurocode] No issues found.", 0
 
     results_sorted = sorted(
@@ -400,7 +430,9 @@ def _render_results(results: List[CheckResult], output_format: str = "text", war
     return "\n".join(lines), exit_code
 
 
-def _build_status(results: List[CheckResult], warnings: List[str], exit_code: int) -> str:
+def _build_status(
+    results: List[CheckResult], warnings: List[str], exit_code: int
+) -> str:
     """Return a one-line status for automation."""
 
     warning_count = len(warnings)

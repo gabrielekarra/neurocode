@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import ast
 import difflib
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
@@ -371,7 +371,12 @@ def _has_neurocode_guard(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> b
                                     if "neurocode guard" in args[0].value:
                                         return True
         # Fallback: match on any string constant containing neurocode guard.
-        if any(isinstance(child, ast.Constant) and isinstance(child.value, str) and "neurocode guard" in child.value for child in ast.walk(node)):
+        if any(
+            isinstance(child, ast.Constant)
+            and isinstance(child.value, str)
+            and "neurocode guard" in child.value
+            for child in ast.walk(node)
+        ):
             return True
     return False
 
@@ -386,7 +391,11 @@ def _body_insert_index(func_node: ast.FunctionDef | ast.AsyncFunctionDef, lines:
     if func_node.body:
         first_stmt = func_node.body[0]
         insert_at = max(insert_at, first_stmt.lineno - 1)
-        if isinstance(first_stmt, ast.Expr) and isinstance(getattr(first_stmt, "value", None), ast.Constant) and isinstance(first_stmt.value.value, str):
+        if (
+            isinstance(first_stmt, ast.Expr)
+            and isinstance(getattr(first_stmt, "value", None), ast.Constant)
+            and isinstance(first_stmt.value.value, str)
+        ):
             doc_end = getattr(first_stmt, "end_lineno", first_stmt.lineno)
             insert_at = max(insert_at, doc_end)
 
@@ -440,17 +449,31 @@ def _decorator_name(dec: ast.AST) -> str:
 def _has_inject_marker(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     for stmt in func_node.body:
         if isinstance(stmt, ast.Raise) and isinstance(stmt.exc, ast.Call):
-            if isinstance(stmt.exc.func, ast.Name) and stmt.exc.func.id == "NotImplementedError":
+            if (
+                isinstance(stmt.exc.func, ast.Name)
+                and stmt.exc.func.id == "NotImplementedError"
+            ):
                 args = stmt.exc.args
-                if args and isinstance(args[0], ast.Constant) and isinstance(args[0].value, str):
+                if (
+                    args
+                    and isinstance(args[0], ast.Constant)
+                    and isinstance(args[0].value, str)
+                ):
                     if "neurocode inject" in args[0].value:
                         return True
         if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
             call = stmt.value
-            if isinstance(call.func, ast.Attribute) and isinstance(call.func.value, ast.Name):
+            if (
+                isinstance(call.func, ast.Attribute)
+                and isinstance(call.func.value, ast.Name)
+            ):
                 if call.func.value.id == "logging" and call.func.attr == "debug":
                     for arg in call.args:
-                        if isinstance(arg, ast.Constant) and isinstance(arg.value, str) and "neurocode inject" in arg.value:
+                        if (
+                            isinstance(arg, ast.Constant)
+                            and isinstance(arg.value, str)
+                            and "neurocode inject" in arg.value
+                        ):
                             return True
     return False
 
