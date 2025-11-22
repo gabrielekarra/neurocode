@@ -10,6 +10,18 @@ authors = [{ name = "NeuroCode Team" }]
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "Proprietary" }
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: Software Development :: Testing",
+  "License :: Other/Proprietary License",
+]
+urls = { "Homepage" = "https://github.com/gabrielekarra/NeuroCode" }
 
 [project.optional-dependencies]
 dev = ["ruff>=0.6.0", "pytest>=8.0.0"]
