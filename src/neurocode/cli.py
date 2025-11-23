@@ -2,26 +2,12 @@ import argparse
 import sys
 from pathlib import Path
 
+from .api import NeurocodeError, NeurocodeProject, open_project
 from .check import check_file_from_disk
-from .config import load_config
-from .embedding_model import EmbeddingItem, EmbeddingStore, load_embedding_store, save_embedding_store
-from .embedding_provider import EmbeddingProvider, make_embedding_provider
-from .embedding_text import build_embedding_documents
 from .explain import explain_file_from_disk
-from .explain_llm import build_explain_llm_bundle
-from .ir_build import build_repository_ir, compute_file_hash
-from .patch import apply_patch_from_disk, apply_patch_plan_from_disk
-from .plan_patch_llm import build_patch_plan_bundle
 from .query import QueryError, render_query_result, run_query
-from .search import (
-    build_query_embedding_from_symbol,
-    build_query_embedding_from_text,
-    load_ir_and_embeddings,
-    search_embeddings,
-)
 from .status import status_from_disk
 from .toon_parse import load_repository_ir
-from .toon_serialize import repository_ir_to_toon
 
 
 def main() -> None:
@@ -320,34 +306,13 @@ def main() -> None:
 
     if args.command == "ir":
         repo_path = Path(args.path).resolve()
-        if not repo_path.exists() or not repo_path.is_dir():
-            print(
-                f"[neurocode] error: path does not exist or is not a directory: {repo_path}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
         if args.check:
-            ir_file = repo_path / ".neurocode" / "ir.toon"
-            if not ir_file.exists():
-                print(
-                    "[neurocode] error: {ir_file} does not exist; run `neurocode ir {repo}` first.".format(
-                        ir_file=ir_file, repo=repo_path
-                    ),
-                    file=sys.stderr,
-                )
+            try:
+                project = open_project(repo_path)
+                stale = project.check_ir_freshness()
+            except NeurocodeError as exc:
+                print(f"[neurocode] error: {exc}", file=sys.stderr)
                 sys.exit(1)
-            repo_ir = load_repository_ir(ir_file)
-            stale: list[str] = []
-            for module in repo_ir.modules:
-                curr_path = (repo_ir.root / module.path).resolve()
-                try:
-                    curr_hash = compute_file_hash(curr_path)
-                except OSError:
-                    stale.append(f"{module.module_name} (missing file {curr_path})")
-                    continue
-                if module.file_hash and module.file_hash != curr_hash:
-                    stale.append(f"{module.module_name} (stale)")
             if stale:
                 print("[neurocode] IR is stale for modules:")
                 for entry in stale:
@@ -356,20 +321,24 @@ def main() -> None:
             print("[neurocode] IR is fresh.")
             sys.exit(0)
 
-        repo_ir = build_repository_ir(repo_path)
-        toon_text = repository_ir_to_toon(repo_ir)
-
-        output_dir = repo_path / ".neurocode"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_path = output_dir / "ir.toon"
-        output_path.write_text(toon_text, encoding="utf-8")
-
+        if not repo_path.exists() or not repo_path.is_dir():
+            print(
+                f"[neurocode] error: path does not exist or is not a directory: {repo_path}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        try:
+            project = NeurocodeProject(repo_path)
+            result = project.build_ir(force=True)
+        except NeurocodeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
         print(
             "[neurocode] IR written to {path} (modules={modules}, functions={functions}, calls={calls})".format(
-                path=output_path,
-                modules=repo_ir.num_modules,
-                functions=repo_ir.num_functions,
-                calls=repo_ir.num_calls,
+                path=result.ir_path,
+                modules=result.modules,
+                functions=result.functions,
+                calls=result.calls,
             )
         )
     elif args.command == "explain":
@@ -403,63 +372,68 @@ def main() -> None:
             print("[neurocode] error: --plan and --fix are mutually exclusive", file=sys.stderr)
             sys.exit(1)
         try:
+            project = open_project(file_path)
             if args.plan:
-                plan_path = Path(args.plan).resolve()
-                result = apply_patch_plan_from_disk(
-                    file_path,
-                    plan_path,
+                import json
+
+                plan_data = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+                apply_result = project.apply_patch_plan(
+                    plan_data,
                     dry_run=args.dry_run,
                     show_diff=args.show_diff,
                 )
             else:
-                result = apply_patch_from_disk(
+                apply_result = project.patch_file(
                     file_path,
-                    args.fix,
+                    fix=args.fix,
                     strategy=args.strategy,
                     target=args.target,
+                    require_target=args.require_target,
                     dry_run=args.dry_run,
                     require_fresh_ir=args.require_fresh_ir,
-                    require_target=args.require_target,
                     inject_kind=args.inject_kind,
                     inject_message=args.inject_message,
                 )
-        except RuntimeError as exc:
+        except NeurocodeError as exc:
             print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
             sys.exit(1)
 
         action = "Planned" if args.dry_run else "Applied"
-        for warn in result.warnings:
+        warnings_list: list[str] = list(apply_result.warnings or [])
+        for warn in warnings_list:
             print(f"[neurocode] warning: {warn}", file=sys.stderr)
 
         if args.format == "json":
             import json
 
             payload = {
-                "status": result.status,
-                "file": str(result.file),
-                "target_function": result.target_function,
-                "summary": result.summary,
-                "inserted_line": result.inserted_line,
-                "inserted_text": result.inserted_text,
-                "no_change": result.no_change,
-                "warnings": result.warnings,
-                "diff": result.diff if (args.dry_run or args.show_diff) else None,
+                "status": apply_result.status or ("noop" if apply_result.is_noop else "applied"),
+                "file": str(apply_result.files_changed[0]),
+                "target_function": apply_result.target_function,
+                "summary": apply_result.summary or ("Patch plan applied" if args.plan else args.fix),
+                "inserted_line": apply_result.inserted_line,
+                "inserted_text": apply_result.inserted_text,
+                "no_change": apply_result.is_noop,
+                "warnings": warnings_list,
+                "diff": apply_result.diff if (args.dry_run or args.show_diff) else None,
             }
             print(json.dumps(payload, indent=2))
         else:
             print(
-                "[neurocode] {action} patch to {path}: {detail} (line {line})".format(
+                "[neurocode] {action} patch to {path}: {detail}".format(
                     action=action,
                     path=file_path,
-                    detail=result.summary,
-                    line=result.inserted_line,
+                    detail=apply_result.summary or ("No changes" if apply_result.is_noop else "Applied"),
                 )
             )
-            if result.no_change and not args.no_noop_note:
+            if apply_result.is_noop and not args.no_noop_note:
                 print("[neurocode] note: patch already existed; no change applied.")
-            if (args.dry_run or args.show_diff) and result.diff:
-                print(result.diff)
-            if result.no_change and not args.dry_run:
+            if (args.dry_run or args.show_diff) and apply_result.diff:
+                print(apply_result.diff)
+            if apply_result.is_noop and not args.dry_run:
                 sys.exit(3)
     elif args.command == "query":
         repo_path = Path(args.path).resolve()
@@ -490,108 +464,34 @@ def main() -> None:
             sys.exit(1)
     elif args.command == "embed":
         repo_path = Path(args.path).resolve()
-        ir_file = repo_path / ".neurocode" / "ir.toon"
-        if not ir_file.is_file():
-            print(
-                f"[neurocode] error: {ir_file} not found. Run `neurocode ir {repo_path}` first.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
         try:
-            config = load_config(repo_path)
-            try:
-                provider, provider_name, model_name = make_embedding_provider(
-                    config,
-                    provider_override=args.provider,
-                    model_override=args.model,
-                    allow_dummy=args.provider == "dummy",
-                )
-            except RuntimeError as exc:
-                print(f"[neurocode] error: {exc}", file=sys.stderr)
-                sys.exit(1)
-            ir = load_repository_ir(ir_file)
-            docs = build_embedding_documents(ir)
-            vectors = provider.embed_batch([doc.text for doc in docs])
-            if len(vectors) != len(docs):
-                print("[neurocode] error: provider returned mismatched embedding count", file=sys.stderr)
-                sys.exit(1)
-
-            from . import __version__
-
-            new_store = EmbeddingStore.new(
-                repo_root=repo_path,
-                engine_version=__version__,
-                model=model_name,
-                provider=provider_name,
+            project = open_project(repo_path)
+            project.ensure_embeddings(
+                provider=args.provider,
+                model=args.model,
+                update=args.update,
             )
-            new_items = []
-            for doc, vec in zip(docs, vectors):
-                new_items.append(
-                    EmbeddingItem(
-                        kind="function",
-                        id=doc.id,
-                        module=doc.module,
-                        name=doc.name,
-                        file=doc.file,
-                        lineno=doc.lineno,
-                        signature=doc.signature,
-                        docstring=doc.docstring,
-                        text=doc.text,
-                        embedding=vec,
-                    )
-                )
-            new_store.items = new_items
-
-            store_path = repo_path / ".neurocode" / "ir-embeddings.toon"
-            store_path.parent.mkdir(parents=True, exist_ok=True)
-
-            if args.update and store_path.exists():
-                try:
-                    existing = load_embedding_store(store_path)
-                    if existing.model and existing.model != model_name:
-                        print(
-                            f"[neurocode] error: existing embeddings use model '{existing.model}' "
-                            f"(requested '{model_name}')",
-                            file=sys.stderr,
-                        )
-                        sys.exit(1)
-                    if existing.provider and existing.provider != provider_name:
-                        print(
-                            f"[neurocode] error: existing embeddings use provider '{existing.provider}' "
-                            f"(requested '{provider_name}')",
-                            file=sys.stderr,
-                        )
-                        sys.exit(1)
-                    merged = {item.id: item for item in existing.items}
-                    for item in new_items:
-                        merged[item.id] = item
-                    new_store.items = list(merged.values())
-                except Exception as exc:  # pragma: no cover - defensive
-                    print(
-                        f"[neurocode] warning: failed to load existing embeddings, overwriting ({exc})",
-                        file=sys.stderr,
-                    )
-
-            save_embedding_store(new_store, store_path)
-
-            summary = {
-                "path": str(store_path),
-                "items": len(new_store.items),
-                "model": args.model,
-                "provider": args.provider,
-            }
+            emb_path = project.repo_root / ".neurocode" / "ir-embeddings.toon"
             if args.format == "json":
                 import json
 
-                print(json.dumps(summary, indent=2))
+                payload = {
+                    "path": str(emb_path),
+                    "items": None,
+                    "model": args.model,
+                    "provider": args.provider,
+                }
+                print(json.dumps(payload, indent=2))
             else:
-                message = (
-                    "[neurocode] embeddings written to {path} (items={items}, "
-                    "model={model}, provider={provider})"
-                ).format(**summary)
-                print(message)
+                print(
+                    "[neurocode] embeddings written to {path} (model={model}, provider={provider})".format(
+                        path=emb_path,
+                        model=args.model,
+                        provider=args.provider,
+                    )
+                )
             sys.exit(0)
-        except RuntimeError as exc:
+        except NeurocodeError as exc:
             print(f"[neurocode] error: {exc}", file=sys.stderr)
             sys.exit(1)
         except Exception as exc:  # pragma: no cover - defensive
@@ -600,60 +500,19 @@ def main() -> None:
     elif args.command == "search":
         repo_path = Path(args.path).resolve()
         try:
-            ir, store = load_ir_and_embeddings(repo_path)
-            config = load_config(repo_path)
-            requested_model = args.model
-            if requested_model and store.model and store.model != requested_model:
-                msg = (
-                    f"[neurocode] error: embedding store model '{store.model}' "
-                    f"does not match requested '{requested_model}'"
-                )
-                print(msg, file=sys.stderr)
-                sys.exit(1)
-
-            provider: EmbeddingProvider | None = None
-            if args.text:
-                allow_dummy = args.provider == "dummy"
-                try:
-                    provider, provider_name, model_name = make_embedding_provider(
-                        config,
-                        provider_override=args.provider,
-                        model_override=args.model or store.model,
-                        allow_dummy=allow_dummy,
-                    )
-                except RuntimeError as exc:
-                    print(f"[neurocode] error: {exc}", file=sys.stderr)
-                    sys.exit(1)
-                if store.model and model_name and store.model != model_name:
-                    print(
-                        f"[neurocode] error: embedding store model '{store.model}' does not match provider "
-                        f"model '{model_name}'",
-                        file=sys.stderr,
-                    )
-                    sys.exit(1)
-                if store.provider and provider_name and store.provider != provider_name:
-                    print(
-                        f"[neurocode] error: embedding store provider '{store.provider}' does not match provider "
-                        f"'{provider_name}'",
-                        file=sys.stderr,
-                    )
-                    sys.exit(1)
-                query_embedding = build_query_embedding_from_text(args.text, provider=provider)
-                query_type = "text"
-                query_value = args.text
-            else:
-                query_embedding = build_query_embedding_from_symbol(store, args.like)
-                query_type = "like"
-                query_value = args.like
-
-            results = search_embeddings(
-                repository_ir=ir,
-                embedding_store=store,
-                query_embedding=query_embedding,
-                module_filter=args.module_filter,
+            project = open_project(repo_path)
+            if bool(args.text) == bool(args.like):
+                raise NeurocodeError("Provide exactly one of --text or --like")
+            results = project.search_code(
+                text=args.text,
+                like=args.like,
+                module=args.module_filter,
                 k=args.k,
+                provider=args.provider,
+                model=args.model,
             )
-
+            query_type = "text" if args.text else "like"
+            query_value = args.text or args.like
             if args.format == "json":
                 import json
 
@@ -667,7 +526,7 @@ def main() -> None:
                             "kind": r.kind,
                             "module": r.module,
                             "name": r.name,
-                            "file": r.file,
+                            "file": str(r.file),
                             "lineno": r.lineno,
                             "signature": r.signature,
                             "score": r.score,
@@ -682,7 +541,7 @@ def main() -> None:
                 for r in results:
                     print(f"{r.score:.3f} {r.module}:{r.name} ({r.file}:{r.lineno}) {r.signature}")
             sys.exit(0)
-        except RuntimeError as exc:
+        except NeurocodeError as exc:
             print(f"[neurocode] error: {exc}", file=sys.stderr)
             sys.exit(1)
         except Exception as exc:  # pragma: no cover - defensive
@@ -691,12 +550,13 @@ def main() -> None:
     elif args.command == "explain-llm":
         file_path = Path(args.file).resolve()
         try:
-            bundle = build_explain_llm_bundle(
+            project = open_project(file_path)
+            bundle = project.explain_llm(
                 file_path,
                 symbol=args.symbol,
                 k_neighbors=args.k_neighbors,
-            ).data
-        except RuntimeError as exc:
+            )
+        except NeurocodeError as exc:
             print(f"[neurocode] error: {exc}", file=sys.stderr)
             sys.exit(1)
         except Exception as exc:  # pragma: no cover - defensive
@@ -731,13 +591,15 @@ def main() -> None:
     elif args.command == "plan-patch-llm":
         file_path = Path(args.file).resolve()
         try:
-            bundle = build_patch_plan_bundle(
+            project = open_project(file_path)
+            plan = project.plan_patch_llm(
                 file_path,
                 fix=args.fix,
                 symbol=args.symbol,
                 k_neighbors=args.k_neighbors,
             )
-        except RuntimeError as exc:
+            bundle = plan.data
+        except NeurocodeError as exc:
             print(f"[neurocode] error: {exc}", file=sys.stderr)
             sys.exit(1)
         except Exception as exc:  # pragma: no cover - defensive

@@ -126,6 +126,28 @@ neurocode plan-patch-llm path/to/file.py --fix "Add logging" --symbol package.mo
 neurocode patch path/to/file.py --plan plan_filled.json --show-diff
 ```
 
+### Library API
+
+NeuroCode can also be used programmatically. The library API wraps the same building blocks as the CLI while raising typed exceptions instead of exiting.
+
+```python
+from neurocode.api import open_project
+
+project = open_project(".")
+project.build_ir()
+project.ensure_embeddings()
+
+summary = project.explain_file("src/app/module.py")
+bundle = project.explain_llm("src/app/module.py", symbol="app.module:handler")
+
+results = project.search_code(text="http handler", k=5)
+plan = project.plan_patch_llm("src/app/module.py", fix="add logging", symbol="app.module:handler")
+
+# send plan.data to an LLM, then apply the returned plan:
+apply_result = project.apply_patch_plan(plan, dry_run=True)
+print(apply_result.diff)
+```
+
 ### Neural IR (Embeddings)
 
 NeuroCode can serialize embeddings for IR entities to a TOON store (`.neurocode/ir-embeddings.toon`) for downstream semantic search and agent reasoning.
