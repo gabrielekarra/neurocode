@@ -69,7 +69,7 @@ def test_search_like_uses_existing_embedding(tmp_path: Path) -> None:
 
 def test_cli_search_text(repo_with_ir: Path, project_root: Path) -> None:
     embed = subprocess.run(
-        [sys.executable, "-m", "neurocode.cli", "embed", str(repo_with_ir)],
+        [sys.executable, "-m", "neurocode.cli", "embed", str(repo_with_ir), "--provider", "dummy"],
         cwd=project_root,
         capture_output=True,
         text=True,
@@ -85,6 +85,8 @@ def test_cli_search_text(repo_with_ir: Path, project_root: Path) -> None:
             str(repo_with_ir),
             "--text",
             "value helper",
+            "--provider",
+            "dummy",
             "--format",
             "json",
         ],

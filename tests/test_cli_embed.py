@@ -17,7 +17,7 @@ def _run_cli(project_root: Path, *args: str) -> subprocess.CompletedProcess[str]
 
 
 def test_cli_embed_creates_store(repo_with_ir: Path, project_root: Path) -> None:
-    result = _run_cli(project_root, "embed", str(repo_with_ir))
+    result = _run_cli(project_root, "embed", str(repo_with_ir), "--provider", "dummy")
     assert result.returncode == 0, result.stderr
 
     store_path = repo_with_ir / ".neurocode" / "ir-embeddings.toon"
@@ -34,6 +34,8 @@ def test_cli_embed_json(repo_with_ir: Path, project_root: Path) -> None:
         project_root,
         "embed",
         str(repo_with_ir),
+        "--provider",
+        "dummy",
         "--format",
         "json",
     )

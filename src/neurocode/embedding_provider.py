@@ -93,8 +93,20 @@ def make_embedding_provider(
     model_override: str | None = None,
     allow_dummy: bool = False,
 ) -> tuple[EmbeddingProvider, str, str]:
-    provider_name = provider_override or getattr(config, "embedding_provider", None) or "dummy"
-    model_name = model_override or getattr(config, "embedding_model", None) or "dummy-embedding-v0"
+    provider_name = provider_override or getattr(config, "embedding_provider", None)
+    model_name = model_override or getattr(config, "embedding_model", None)
+
+    if provider_name is None:
+        if allow_dummy or getattr(config, "embedding_allow_dummy", False):
+            provider_name = "dummy"
+        else:
+            raise RuntimeError(
+                "No embedding provider configured. Set embedding.provider in config "
+                "or pass --provider dummy explicitly."
+            )
+
+    if model_name is None:
+        model_name = "dummy-embedding-v0" if provider_name == "dummy" else "text-embedding-3-small"
 
     if provider_name == "dummy":
         if not allow_dummy and not getattr(config, "embedding_allow_dummy", False):

@@ -201,13 +201,11 @@ def main() -> None:
     )
     embed_parser.add_argument(
         "--provider",
-        default="dummy",
-        help="Embedding provider to use (default: dummy)",
+        help="Embedding provider to use (e.g., openai, dummy)",
     )
     embed_parser.add_argument(
         "--model",
-        default="dummy-embedding-v0",
-        help="Embedding model identifier (default: dummy-embedding-v0)",
+        help="Embedding model identifier (provider-specific)",
     )
     embed_parser.add_argument(
         "--update",
@@ -252,8 +250,7 @@ def main() -> None:
     )
     search_parser.add_argument(
         "--provider",
-        default="dummy",
-        help="Embedding provider to use for text queries (default: dummy)",
+        help="Embedding provider to use for text queries (e.g., openai, dummy)",
     )
     search_parser.add_argument(
         "--model",
