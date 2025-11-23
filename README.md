@@ -74,6 +74,9 @@ neurocode patch path/to/file.py --fix "describe fix" --strategy guard --show-dif
   - Idempotent via `# neurocode:*` markers; exit code `3` when no change. `--format json` emits structured result (status, diff, warnings, exit_code).
 - `neurocode status [path] [--format text|json]` — summarize IR freshness (hash comparison), build timestamp, and config values in one shot; exit `1` if any module is stale/missing.
 - `neurocode query <path> --kind callers|callees|fan-in|fan-out [--symbol ...] [--module ...] [--format text|json]` — IR-backed structural queries (callers/callees and fan-in/out counts).
+- `neurocode embed <path> [--provider dummy] [--model dummy-embedding-v0] [--update] [--format text|json]` — build Neural IR embeddings and store them in `.neurocode/ir-embeddings.toon`.
+- `neurocode search <path> (--text "…")|(--like package.module:func) [--k 10] [--module ...] [--format text|json]` — semantic search over embeddings stored in `.neurocode/ir-embeddings.toon`.
+- `neurocode explain-llm <file> [--symbol package.module:func] [--k-neighbors 10] [--format text|json]` — build an LLM-ready reasoning bundle (IR slice, callers/callees, checks, semantic neighbors, source).
 
 ### Examples
 
@@ -108,6 +111,61 @@ neurocode patch path/to/file.py --fix "describe fix" --strategy guard --dry-run 
 
 # 6) Query structure (callers)
 neurocode query . --kind callers --symbol package.mod_b.helper_value --format json | jq .
+
+# 7) Build embeddings
+neurocode embed . --provider dummy --format text
+
+# 8) Semantic search (text)
+neurocode search . --text "request handler"
+
+# 9) LLM-ready bundle
+neurocode explain-llm path/to/file.py --symbol package.mod:orchestrator --format json
+```
+
+### Neural IR (Embeddings)
+
+NeuroCode can serialize embeddings for IR entities to a TOON store (`.neurocode/ir-embeddings.toon`) for downstream semantic search and agent reasoning.
+
+Examples:
+- `neurocode embed .`
+- `neurocode embed . --provider dummy --format json`
+
+Embeddings are written in TOON format (no JSON storage) and can be refreshed with `--update`.
+
+### Semantic Search (Neural IR)
+
+Use embeddings to find related functions:
+
+```bash
+# Build IR and embeddings
+neurocode ir .
+neurocode embed .
+
+# Search by text
+neurocode search . --text "http request handler"
+
+# Search for functions similar to an existing symbol
+neurocode search . --like package.mod:orchestrator --format json
+```
+
+Results reference IR entities (module, function, file/line) and can be consumed in text or JSON for agents.
+
+### LLM-Ready Explain (`explain-llm`)
+
+`neurocode explain-llm` packages a rich reasoning bundle for a file (and optional target symbol) including:
+- IR slice (imports/functions/classes)
+- Call graph neighborhood (callers/callees)
+- Structural diagnostics from `check`
+- Semantic neighbors from embeddings/search
+- Source code text
+
+Examples:
+```bash
+# Basic bundle
+neurocode explain-llm path/to/file.py --format json
+
+# Focus on a symbol with neighbors
+neurocode explain-llm path/to/file.py --symbol package.mod:handle --k-neighbors 8 --format json
 ```
 
 Custom config example:

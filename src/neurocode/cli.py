@@ -3,10 +3,20 @@ import sys
 from pathlib import Path
 
 from .check import check_file_from_disk
+from .embedding_model import EmbeddingItem, EmbeddingStore, load_embedding_store, save_embedding_store
+from .embedding_provider import DummyEmbeddingProvider, EmbeddingProvider
+from .embedding_text import build_embedding_documents
 from .explain import explain_file_from_disk
+from .explain_llm import build_explain_llm_bundle
 from .ir_build import build_repository_ir, compute_file_hash
 from .patch import apply_patch_from_disk
 from .query import QueryError, render_query_result, run_query
+from .search import (
+    build_query_embedding_from_symbol,
+    build_query_embedding_from_text,
+    load_ir_and_embeddings,
+    search_embeddings,
+)
 from .status import status_from_disk
 from .toon_parse import load_repository_ir
 from .toon_serialize import repository_ir_to_toon
@@ -179,6 +189,104 @@ def main() -> None:
         help="Output format (default: text)",
     )
 
+    embed_parser = subparsers.add_parser(
+        "embed", help="Generate embeddings for the IR and write .neurocode/ir-embeddings.toon"
+    )
+    embed_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Path to the repository root containing .neurocode/ir.toon (default: current directory)",
+    )
+    embed_parser.add_argument(
+        "--provider",
+        default="dummy",
+        help="Embedding provider to use (default: dummy)",
+    )
+    embed_parser.add_argument(
+        "--model",
+        default="dummy-embedding-v0",
+        help="Embedding model identifier (default: dummy-embedding-v0)",
+    )
+    embed_parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Merge with existing .neurocode/ir-embeddings.toon if present",
+    )
+    embed_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
+
+    search_parser = subparsers.add_parser(
+        "search", help="Semantic search over embeddings stored in .neurocode/ir-embeddings.toon"
+    )
+    search_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Path to the repository root containing .neurocode (default: current directory)",
+    )
+    query_group = search_parser.add_mutually_exclusive_group(required=True)
+    query_group.add_argument(
+        "--text",
+        help="Text query to search for similar functions",
+    )
+    query_group.add_argument(
+        "--like",
+        help="Find functions similar to this symbol (e.g., package.module:func)",
+    )
+    search_parser.add_argument(
+        "--k",
+        type=int,
+        default=10,
+        help="Number of results to return (default: 10)",
+    )
+    search_parser.add_argument(
+        "--module",
+        dest="module_filter",
+        help="Restrict results to a module/package (prefix match)",
+    )
+    search_parser.add_argument(
+        "--provider",
+        default="dummy",
+        help="Embedding provider to use for text queries (default: dummy)",
+    )
+    search_parser.add_argument(
+        "--model",
+        default=None,
+        help="Expected embedding model; if set and differs from the store, search fails",
+    )
+    search_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
+
+    explain_llm_parser = subparsers.add_parser(
+        "explain-llm", help="Build an LLM-ready reasoning bundle for a file/symbol"
+    )
+    explain_llm_parser.add_argument("file", help="Python file to explain for LLM consumption")
+    explain_llm_parser.add_argument(
+        "--symbol",
+        help="Optional symbol (qualified function) to focus on, e.g., package.module:func",
+    )
+    explain_llm_parser.add_argument(
+        "--k-neighbors",
+        type=int,
+        default=10,
+        help="Number of semantic neighbors to include (default: 10)",
+    )
+    explain_llm_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="json",
+        help="Output format (default: json)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "ir":
@@ -336,6 +444,200 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover - defensive
             print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
             sys.exit(1)
+    elif args.command == "embed":
+        repo_path = Path(args.path).resolve()
+        ir_file = repo_path / ".neurocode" / "ir.toon"
+        if not ir_file.is_file():
+            print(
+                f"[neurocode] error: {ir_file} not found. Run `neurocode ir {repo_path}` first.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        try:
+            ir = load_repository_ir(ir_file)
+            docs = build_embedding_documents(ir)
+            provider: EmbeddingProvider
+            if args.provider == "dummy":
+                provider = DummyEmbeddingProvider()
+            else:
+                print(f"[neurocode] error: unknown provider: {args.provider}", file=sys.stderr)
+                sys.exit(1)
+            vectors = provider.embed_batch([doc.text for doc in docs])
+            if len(vectors) != len(docs):
+                print("[neurocode] error: provider returned mismatched embedding count", file=sys.stderr)
+                sys.exit(1)
+
+            from . import __version__
+
+            new_store = EmbeddingStore.new(repo_root=repo_path, engine_version=__version__, model=args.model)
+            new_items = []
+            for doc, vec in zip(docs, vectors):
+                new_items.append(
+                    EmbeddingItem(
+                        kind="function",
+                        id=doc.id,
+                        module=doc.module,
+                        name=doc.name,
+                        file=doc.file,
+                        lineno=doc.lineno,
+                        signature=doc.signature,
+                        docstring=doc.docstring,
+                        text=doc.text,
+                        embedding=vec,
+                    )
+                )
+            new_store.items = new_items
+
+            store_path = repo_path / ".neurocode" / "ir-embeddings.toon"
+            store_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if args.update and store_path.exists():
+                try:
+                    existing = load_embedding_store(store_path)
+                    merged = {item.id: item for item in existing.items}
+                    for item in new_items:
+                        merged[item.id] = item
+                    new_store.items = list(merged.values())
+                except Exception as exc:  # pragma: no cover - defensive
+                    print(
+                        f"[neurocode] warning: failed to load existing embeddings, overwriting ({exc})",
+                        file=sys.stderr,
+                    )
+
+            save_embedding_store(new_store, store_path)
+
+            summary = {
+                "path": str(store_path),
+                "items": len(new_store.items),
+                "model": args.model,
+                "provider": args.provider,
+            }
+            if args.format == "json":
+                import json
+
+                print(json.dumps(summary, indent=2))
+            else:
+                message = (
+                    "[neurocode] embeddings written to {path} (items={items}, "
+                    "model={model}, provider={provider})"
+                ).format(**summary)
+                print(message)
+            sys.exit(0)
+        except RuntimeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
+            sys.exit(1)
+    elif args.command == "search":
+        repo_path = Path(args.path).resolve()
+        try:
+            ir, store = load_ir_and_embeddings(repo_path)
+            requested_model = args.model
+            if requested_model and store.model and store.model != requested_model:
+                msg = (
+                    f"[neurocode] error: embedding store model '{store.model}' "
+                    f"does not match requested '{requested_model}'"
+                )
+                print(msg, file=sys.stderr)
+                sys.exit(1)
+
+            provider: EmbeddingProvider | None = None
+            if args.text:
+                if args.provider != "dummy":
+                    print(f"[neurocode] error: unknown provider: {args.provider}", file=sys.stderr)
+                    sys.exit(1)
+                provider = DummyEmbeddingProvider()
+                query_embedding = build_query_embedding_from_text(args.text, provider=provider)
+                query_type = "text"
+                query_value = args.text
+            else:
+                query_embedding = build_query_embedding_from_symbol(store, args.like)
+                query_type = "like"
+                query_value = args.like
+
+            results = search_embeddings(
+                repository_ir=ir,
+                embedding_store=store,
+                query_embedding=query_embedding,
+                module_filter=args.module_filter,
+                k=args.k,
+            )
+
+            if args.format == "json":
+                import json
+
+                payload = {
+                    "query_type": query_type,
+                    "query": query_value,
+                    "k": args.k,
+                    "results": [
+                        {
+                            "id": r.id,
+                            "kind": r.kind,
+                            "module": r.module,
+                            "name": r.name,
+                            "file": r.file,
+                            "lineno": r.lineno,
+                            "signature": r.signature,
+                            "score": r.score,
+                        }
+                        for r in results
+                    ],
+                }
+                print(json.dumps(payload, indent=2))
+            else:
+                header = f"[neurocode] search ({query_type}) k={args.k}"
+                print(header)
+                for r in results:
+                    print(f"{r.score:.3f} {r.module}:{r.name} ({r.file}:{r.lineno}) {r.signature}")
+            sys.exit(0)
+        except RuntimeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
+            sys.exit(1)
+    elif args.command == "explain-llm":
+        file_path = Path(args.file).resolve()
+        try:
+            bundle = build_explain_llm_bundle(
+                file_path,
+                symbol=args.symbol,
+                k_neighbors=args.k_neighbors,
+            ).data
+        except RuntimeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        if args.format == "json":
+            import json
+
+            print(json.dumps(bundle, indent=2))
+        else:
+            target = bundle.get("target")
+            checks = bundle.get("checks", [])
+            neighbors = bundle.get("semantic_neighbors", [])
+            print(
+                "[neurocode] explain-llm for {file} (module={module}, target={target})".format(
+                    file=bundle.get("file"),
+                    module=bundle.get("module"),
+                    target=target["symbol"] if target else "(none)",
+                )
+            )
+            print(
+                "functions={fn} callers={c} callees={d} checks={chk} neighbors={n}".format(
+                    fn=len(bundle.get("ir", {}).get("module_summary", {}).get("functions", [])),
+                    c=len(bundle.get("call_graph", {}).get("callers", [])),
+                    d=len(bundle.get("call_graph", {}).get("callees", [])),
+                    chk=len(checks),
+                    n=len(neighbors),
+                )
+            )
+        sys.exit(0)
     elif args.command == "status":
         repo_path = Path(args.path).resolve()
         output, exit_code = status_from_disk(repo_path, output_format=args.format)
