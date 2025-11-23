@@ -290,7 +290,9 @@ class NeurocodeProject:
                 "lineno": fn.lineno,
                 "num_calls": len(fn.calls),
             }
-            for fn in sorted(module.functions, key=lambda f: f.lineno)
+            for fn in sorted(
+                [f for f in module.functions if f.kind != "module"], key=lambda f: f.lineno
+            )
         ]
         classes = [
             {

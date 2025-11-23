@@ -37,7 +37,9 @@ def _module_summary(ir: RepositoryIR, module: ModuleIR) -> dict:
         {edge.imported_module for edge in ir.module_import_edges if edge.importer_module_id == module.id}
     )
     functions = []
-    for fn in sorted(module.functions, key=lambda f: f.lineno):
+    for fn in sorted(
+        [f for f in module.functions if f.kind != "module"], key=lambda f: f.lineno
+    ):
         functions.append(
             {
                 "name": fn.name,

@@ -13,14 +13,17 @@ def _find_target_function(ir, module, symbol: str | None) -> FunctionIR | None:
     if symbol:
         sym_norm = symbol.replace(":", ".")
         for fn in module.functions:
+            if fn.kind == "module":
+                continue
             if fn.qualified_name == sym_norm or fn.qualified_name.endswith(f".{sym_norm}"):
                 return fn
     # fallback: first module-level function
-    module_level = [fn for fn in module.functions if fn.parent_class_id is None]
+    module_level = [fn for fn in module.functions if fn.parent_class_id is None and fn.kind != "module"]
     if module_level:
         return min(module_level, key=lambda f: f.lineno)
-    if module.functions:
-        return min(module.functions, key=lambda f: f.lineno)
+    non_entry = [fn for fn in module.functions if fn.kind != "module"]
+    if non_entry:
+        return min(non_entry, key=lambda f: f.lineno)
     return None
 
 

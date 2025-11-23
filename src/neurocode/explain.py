@@ -104,7 +104,7 @@ def _explain_module_json(ir: RepositoryIR, module: ModuleIR, warning: str | None
 
     functions_payload: List[dict] = []
     for fn in sorted(
-        [f for f in module.functions if f.parent_class_id is None],
+        [f for f in module.functions if f.parent_class_id is None and f.kind != "module"],
         key=lambda f: f.lineno,
     ):
         functions_payload.append(
@@ -257,7 +257,7 @@ def explain_file(
 
     # Module-level functions.
     module_level_functions = [
-        fn for fn in module.functions if fn.parent_class_id is None
+        fn for fn in module.functions if fn.parent_class_id is None and fn.kind != "module"
     ]
     lines.append("Functions:")
     if not module_level_functions:

@@ -28,6 +28,12 @@ class CheckResult:
     lineno: int | None = None
 
 
+def _module_functions(module: ModuleIR) -> List[FunctionIR]:
+    """Exclude module entry pseudo-functions from function iterables."""
+
+    return [fn for fn in module.functions if fn.kind != "module"]
+
+
 def check_file_from_disk(
     file: Path,
     output_format: str = "text",
@@ -212,7 +218,7 @@ def _check_call_cycles(
     """Detect simple call graph cycles involving functions in this module."""
 
     # Build adjacency for functions in this module.
-    local_fn_ids: Set[int] = {fn.id for fn in module.functions}
+    local_fn_ids: Set[int] = {fn.id for fn in _module_functions(module)}
     adj: Dict[int, Set[int]] = {}
     for edge in ir.call_edges:
         if (
@@ -245,7 +251,7 @@ def _check_call_cycles(
     if not cycles:
         return []
 
-    fn_by_id: Dict[int, FunctionIR] = {fn.id: fn for fn in module.functions}
+    fn_by_id: Dict[int, FunctionIR] = {fn.id: fn for fn in _module_functions(module)}
     results: List[CheckResult] = []
     for cycle in cycles:
         names = [fn_by_id.get(fid).qualified_name for fid in cycle if fn_by_id.get(fid)]
@@ -331,7 +337,7 @@ def _check_unused_returns(
 ) -> List[CheckResult]:
     """Detect functions whose return values are never used (heuristic)."""
 
-    fn_ids_in_module: Set[int] = {fn.id for fn in module.functions}
+    fn_ids_in_module: Set[int] = {fn.id for fn in _module_functions(module)}
     used_returns: Set[int] = set()
 
     for edge in ir.call_edges:
@@ -342,7 +348,7 @@ def _check_unused_returns(
             used_returns.add(edge.callee_function_id)
 
     results: List[CheckResult] = []
-    for fn in module.functions:
+    for fn in _module_functions(module):
         if fn.id in used_returns:
             continue
         # Heuristic: skip dunders and tests.
@@ -564,7 +570,7 @@ def _check_functions_without_callers(
 
     results: List[CheckResult] = []
 
-    for fn in module.functions:
+    for fn in _module_functions(module):
         if should_ignore(fn):
             continue
         if fn.id not in called_function_ids:
@@ -598,7 +604,7 @@ def _check_high_fanout_functions(
     different callees can be hard to understand and test.
     """
 
-    module_fn_ids: Set[int] = {fn.id for fn in module.functions}
+    module_fn_ids: Set[int] = {fn.id for fn in _module_functions(module)}
     if not module_fn_ids:
         return []
 
@@ -616,7 +622,7 @@ def _check_high_fanout_functions(
 
     results: List[CheckResult] = []
 
-    for fn in module.functions:
+    for fn in _module_functions(module):
         targets = targets_by_fn.get(fn.id, set())
         if len(targets) >= config.fanout_threshold:
             message = (
