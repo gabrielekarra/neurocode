@@ -1,3 +1,9 @@
+from pathlib import Path
+import sys
+
+# Ensure sample repo package is importable when running from project root.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from package import mod_a
 
 
