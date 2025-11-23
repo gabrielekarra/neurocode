@@ -13,6 +13,7 @@ from .embedding_provider import make_embedding_provider
 from .embedding_text import build_embedding_documents
 from .explain import _find_module_for_file, _find_repo_root_for_file
 from .explain_llm import build_explain_llm_bundle
+from .history_model import append_patch_history, load_patch_history
 from .ir_build import build_repository_ir
 from .ir_model import RepositoryIR
 from .patch import apply_patch_from_disk, apply_patch_plan_from_disk
@@ -120,6 +121,18 @@ class PatchApplyResult:
     target_function: str | None = None
     inserted_line: int | None = None
     inserted_text: str | None = None
+
+
+@dataclass
+class PatchHistoryEntryResult:
+    id: str
+    timestamp: str
+    fix: str
+    files_changed: list[str]
+    is_noop: bool
+    summary: str
+    warnings: list[str]
+    plan_id: str | None = None
 
 
 def open_project(path: Path | str = ".") -> "NeurocodeProject":
@@ -457,7 +470,7 @@ class NeurocodeProject:
                 tmp_path.unlink()
             except OSError:
                 pass
-        return PatchApplyResult(
+        result_obj = PatchApplyResult(
             repo_root=self.repo_root,
             files_changed=[result.file],
             diff=result.diff,
@@ -469,6 +482,7 @@ class NeurocodeProject:
             inserted_line=result.inserted_line,
             inserted_text=result.inserted_text,
         )
+        return result_obj
 
     def patch_file(
         self,
@@ -498,7 +512,7 @@ class NeurocodeProject:
             )
         except RuntimeError as exc:
             raise NeurocodeError(str(exc)) from exc
-        return PatchApplyResult(
+        result_obj = PatchApplyResult(
             repo_root=self.repo_root,
             files_changed=[result.file],
             diff=result.diff,
@@ -510,6 +524,38 @@ class NeurocodeProject:
             inserted_line=result.inserted_line,
             inserted_text=result.inserted_text,
         )
+        if not dry_run and not result_obj.is_noop:
+            try:
+                append_patch_history(
+                    self.repo_root,
+                    fix=fix,
+                    files_changed=[str(result.file.relative_to(self.repo_root))],
+                    is_noop=result_obj.is_noop,
+                    summary=result_obj.summary or "",
+                    warnings=result_obj.warnings or [],
+                )
+            except Exception:
+                pass
+        return result_obj
+
+    def list_patch_history(self, limit: int = 20) -> list[PatchHistoryEntryResult]:
+        history = load_patch_history(self.repo_root)
+        entries = list(reversed(history.entries))
+        if limit is not None and limit > 0:
+            entries = entries[:limit]
+        return [
+            PatchHistoryEntryResult(
+                id=entry.id,
+                timestamp=entry.timestamp,
+                fix=entry.fix,
+                files_changed=entry.files_changed,
+                is_noop=entry.is_noop,
+                summary=entry.summary,
+                warnings=entry.warnings,
+                plan_id=entry.plan_id,
+            )
+            for entry in entries
+        ]
 
     def check_ir_freshness(self) -> list[str]:
         """Return a list of staleness issues for the loaded IR."""

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List
 
 from .explain import _find_module_for_file, _find_repo_root_for_file
+from .history_model import append_patch_history
 from .ir_build import compute_file_hash
 from .ir_model import FunctionIR, ModuleIR, RepositoryIR
 from .patch_plan import load_patch_plan
@@ -430,7 +431,7 @@ def apply_patch_plan_from_disk(
     if not dry_run:
         file.write_text(new_text, encoding="utf-8")
 
-    return PatchResult(
+    result = PatchResult(
         file=file,
         description=plan.fix,
         target_function=None,
@@ -441,6 +442,18 @@ def apply_patch_plan_from_disk(
         warnings=[],
         no_change=False,
     )
+    if not dry_run and not result.no_change:
+        try:
+            append_patch_history(
+                repo_root,
+                fix=plan.fix,
+                files_changed=[str(file.relative_to(repo_root))],
+                is_noop=result.no_change,
+                summary=result.summary,
+            )
+        except Exception:
+            pass
+    return result
 
 
 def _render_diff(old: List[str], new: List[str], file: Path) -> str:

@@ -136,6 +136,28 @@ def main() -> None:
         help="Output format for patch result (default: text)",
     )
 
+    history_parser = subparsers.add_parser(
+        "patch-history", help="Show applied patch history from .neurocode/patch-history.toon"
+    )
+    history_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Path to the repository root (default: current directory)",
+    )
+    history_parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum number of entries to show (default: 20)",
+    )
+    history_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
+
     status_parser = subparsers.add_parser("status", help="Report IR freshness and config summary")
     status_parser.add_argument(
         "path",
@@ -435,6 +457,47 @@ def main() -> None:
                 print(apply_result.diff)
             if apply_result.is_noop and not args.dry_run:
                 sys.exit(3)
+    elif args.command == "patch-history":
+        repo_path = Path(args.path).resolve()
+        try:
+            project = open_project(repo_path)
+            entries = project.list_patch_history(limit=args.limit)
+        except NeurocodeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        if args.format == "json":
+            import json
+
+            print(
+                json.dumps(
+                    [
+                        {
+                            "id": e.id,
+                            "timestamp": e.timestamp,
+                            "fix": e.fix,
+                            "files_changed": e.files_changed,
+                            "is_noop": e.is_noop,
+                            "summary": e.summary,
+                            "warnings": e.warnings,
+                            "plan_id": e.plan_id,
+                        }
+                        for e in entries
+                    ],
+                    indent=2,
+                )
+            )
+        else:
+            if not entries:
+                print("[neurocode] no patch history entries found")
+            else:
+                for e in entries:
+                    files = ", ".join(e.files_changed)
+                    warn = f" warnings={len(e.warnings)}" if e.warnings else ""
+                    print(f"- {e.timestamp} {e.fix} files=[{files}] summary={e.summary}{warn}")
+        sys.exit(0)
     elif args.command == "query":
         repo_path = Path(args.path).resolve()
         ir_file = repo_path / ".neurocode" / "ir.toon"

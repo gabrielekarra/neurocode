@@ -126,6 +126,15 @@ neurocode plan-patch-llm path/to/file.py --fix "Add logging" --symbol package.mo
 neurocode patch path/to/file.py --plan plan_filled.json --show-diff
 ```
 
+### Patch History
+
+NeuroCode records applied patches (non-dry-run) in TOON format at `.neurocode/patch-history.toon`. View recent entries:
+
+```bash
+neurocode patch-history .
+neurocode patch-history . --format json --limit 5
+```
+
 ### Patch Plan JSON Protocol
 
 `plan-patch-llm` produces a strict JSON bundle for LLM roundtrips, and `patch --plan` validates it before applying. Storage stays TOON; JSON is **only** the LLM wire format.
