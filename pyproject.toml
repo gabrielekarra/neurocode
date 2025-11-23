@@ -20,7 +20,6 @@ classifiers = [
   "Topic :: Software Development :: Testing",
   "License :: Other/Proprietary License",
 ]
-<<<<<<< HEAD
 urls = { "Homepage" = "https://github.com/gabrielekarra/neurocode" }
 dynamic = ["version"]
 
