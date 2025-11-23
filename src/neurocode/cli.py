@@ -7,6 +7,7 @@ from .embedding_model import EmbeddingItem, EmbeddingStore, load_embedding_store
 from .embedding_provider import DummyEmbeddingProvider, EmbeddingProvider
 from .embedding_text import build_embedding_documents
 from .explain import explain_file_from_disk
+from .explain_llm import build_explain_llm_bundle
 from .ir_build import build_repository_ir, compute_file_hash
 from .patch import apply_patch_from_disk
 from .query import QueryError, render_query_result, run_query
@@ -187,6 +188,7 @@ def main() -> None:
         default="text",
         help="Output format (default: text)",
     )
+
     embed_parser = subparsers.add_parser(
         "embed", help="Generate embeddings for the IR and write .neurocode/ir-embeddings.toon"
     )
@@ -262,6 +264,27 @@ def main() -> None:
         choices=["text", "json"],
         default="text",
         help="Output format (default: text)",
+    )
+
+    explain_llm_parser = subparsers.add_parser(
+        "explain-llm", help="Build an LLM-ready reasoning bundle for a file/symbol"
+    )
+    explain_llm_parser.add_argument("file", help="Python file to explain for LLM consumption")
+    explain_llm_parser.add_argument(
+        "--symbol",
+        help="Optional symbol (qualified function) to focus on, e.g., package.module:func",
+    )
+    explain_llm_parser.add_argument(
+        "--k-neighbors",
+        type=int,
+        default=10,
+        help="Number of semantic neighbors to include (default: 10)",
+    )
+    explain_llm_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="json",
+        help="Output format (default: json)",
     )
 
     args = parser.parse_args()
@@ -575,7 +598,46 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover - defensive
             print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
             sys.exit(1)
+    elif args.command == "explain-llm":
+        file_path = Path(args.file).resolve()
+        try:
+            bundle = build_explain_llm_bundle(
+                file_path,
+                symbol=args.symbol,
+                k_neighbors=args.k_neighbors,
+            ).data
+        except RuntimeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
+            sys.exit(1)
 
+        if args.format == "json":
+            import json
+
+            print(json.dumps(bundle, indent=2))
+        else:
+            target = bundle.get("target")
+            checks = bundle.get("checks", [])
+            neighbors = bundle.get("semantic_neighbors", [])
+            print(
+                "[neurocode] explain-llm for {file} (module={module}, target={target})".format(
+                    file=bundle.get("file"),
+                    module=bundle.get("module"),
+                    target=target["symbol"] if target else "(none)",
+                )
+            )
+            print(
+                "functions={fn} callers={c} callees={d} checks={chk} neighbors={n}".format(
+                    fn=len(bundle.get("ir", {}).get("module_summary", {}).get("functions", [])),
+                    c=len(bundle.get("call_graph", {}).get("callers", [])),
+                    d=len(bundle.get("call_graph", {}).get("callees", [])),
+                    chk=len(checks),
+                    n=len(neighbors),
+                )
+            )
+        sys.exit(0)
     elif args.command == "status":
         repo_path = Path(args.path).resolve()
         output, exit_code = status_from_disk(repo_path, output_format=args.format)

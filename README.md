@@ -75,8 +75,8 @@ neurocode patch path/to/file.py --fix "describe fix" --strategy guard --show-dif
 - `neurocode status [path] [--format text|json]` — summarize IR freshness (hash comparison), build timestamp, and config values in one shot; exit `1` if any module is stale/missing.
 - `neurocode query <path> --kind callers|callees|fan-in|fan-out [--symbol ...] [--module ...] [--format text|json]` — IR-backed structural queries (callers/callees and fan-in/out counts).
 - `neurocode embed <path> [--provider dummy] [--model dummy-embedding-v0] [--update] [--format text|json]` — build Neural IR embeddings and store them in `.neurocode/ir-embeddings.toon`.
-- `neurocode search <path> (--text \"...\")|(--like package.module:func) [--k 10] [--module ...] [--format text|json]` — semantic search over embeddings stored in `.neurocode/ir-embeddings.toon`.
-
+- `neurocode search <path> (--text "…")|(--like package.module:func) [--k 10] [--module ...] [--format text|json]` — semantic search over embeddings stored in `.neurocode/ir-embeddings.toon`.
+- `neurocode explain-llm <file> [--symbol package.module:func] [--k-neighbors 10] [--format text|json]` — build an LLM-ready reasoning bundle (IR slice, callers/callees, checks, semantic neighbors, source).
 
 ### Examples
 
@@ -118,6 +118,8 @@ neurocode embed . --provider dummy --format text
 # 8) Semantic search (text)
 neurocode search . --text "request handler"
 
+# 9) LLM-ready bundle
+neurocode explain-llm path/to/file.py --symbol package.mod:orchestrator --format json
 ```
 
 ### Neural IR (Embeddings)
@@ -148,6 +150,23 @@ neurocode search . --like package.mod:orchestrator --format json
 
 Results reference IR entities (module, function, file/line) and can be consumed in text or JSON for agents.
 
+### LLM-Ready Explain (`explain-llm`)
+
+`neurocode explain-llm` packages a rich reasoning bundle for a file (and optional target symbol) including:
+- IR slice (imports/functions/classes)
+- Call graph neighborhood (callers/callees)
+- Structural diagnostics from `check`
+- Semantic neighbors from embeddings/search
+- Source code text
+
+Examples:
+```bash
+# Basic bundle
+neurocode explain-llm path/to/file.py --format json
+
+# Focus on a symbol with neighbors
+neurocode explain-llm path/to/file.py --symbol package.mod:handle --k-neighbors 8 --format json
+```
 
 Custom config example:
 ```toml
