@@ -126,6 +126,46 @@ neurocode plan-patch-llm path/to/file.py --fix "Add logging" --symbol package.mo
 neurocode patch path/to/file.py --plan plan_filled.json --show-diff
 ```
 
+### Patch Plan JSON Protocol
+
+`plan-patch-llm` produces a strict JSON bundle for LLM roundtrips, and `patch --plan` validates it before applying. Storage stays TOON; JSON is **only** the LLM wire format.
+
+- Fields the LLM **MUST NOT** change: `version`, `engine_version`, `repo_root`, `file`, `module`, `target.*`, `operations[*].{id,op,file,symbol,lineno,end_lineno,enabled}`.
+- Fields the LLM **MAY** change: `fix` (rarely), `operations[*].description`, `operations[*].code` (fill with the actual patch), `operations[*].enabled` (toggle).
+- Validation: unknown/missing fields are rejected; `op` must be one of `insert_before|insert_after|replace_range|append_to_function`; enabled operations must provide non-empty `code` when applying.
+
+Sample prompt snippet:
+```
+You are completing a NeuroCode PatchPlanBundle JSON. Do not add/remove fields.
+Fill `operations[*].code` with the minimal patch. Leave structure untouched.
+```
+
+Sample bundle (truncated):
+```json
+{
+  "version": 1,
+  "engine_version": "0.1.2",
+  "repo_root": "/abs/repo",
+  "file": "package/mod_a.py",
+  "module": "package.mod_a",
+  "fix": "Add logging",
+  "target": {"symbol": "package.mod_a:orchestrator", "kind": "function", "lineno": 10},
+  "operations": [
+    {
+      "id": "OP_1",
+      "op": "append_to_function",
+      "enabled": true,
+      "file": "package/mod_a.py",
+      "symbol": "package.mod_a:orchestrator",
+      "lineno": 10,
+      "end_lineno": null,
+      "description": "Implement fix: Add logging",
+      "code": ""
+    }
+  ]
+}
+```
+
 ### Library API
 
 NeuroCode can also be used programmatically. The library API wraps the same building blocks as the CLI while raising typed exceptions instead of exiting.

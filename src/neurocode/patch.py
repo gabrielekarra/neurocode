@@ -383,9 +383,7 @@ def apply_patch_plan_from_disk(
         raise RuntimeError(
             "Could not find .neurocode/ir.toon. Run `neurocode ir` at the repository root first."
         )
-    plan = load_patch_plan(plan_path, expected_file=file)
-    if plan.status != "ready":
-        raise RuntimeError("Patch plan status is not 'ready'; ensure the plan is filled by an LLM.")
+    plan = load_patch_plan(plan_path, expected_file=file, require_filled=True)
 
     original_text = file.read_text(encoding="utf-8")
     original_lines = original_text.splitlines()

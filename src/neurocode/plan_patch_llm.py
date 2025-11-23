@@ -26,17 +26,16 @@ def _find_target_function(ir, module, symbol: str | None) -> FunctionIR | None:
 
 def _initial_operations(target_fn: FunctionIR | None, fix: str, file_rel: str) -> List[dict]:
     ops: List[dict] = []
-    base_target = {
-        "symbol": target_fn.qualified_name if target_fn else None,
-        "kind": "function" if target_fn else None,
-        "file": file_rel,
-        "lineno": target_fn.lineno if target_fn else 1,
-    }
+    symbol = target_fn.qualified_name if target_fn else ""
+    lineno = target_fn.lineno if target_fn else 1
     ops.append(
         {
             "op": "append_to_function",
             "id": "OP_1",
-            "target": base_target,
+            "file": file_rel,
+            "symbol": symbol,
+            "lineno": lineno,
+            "end_lineno": None,
             "code": "",
             "description": f"Implement fix: {fix}",
             "enabled": True,
@@ -47,7 +46,10 @@ def _initial_operations(target_fn: FunctionIR | None, fix: str, file_rel: str) -
             {
                 "op": "insert_before",
                 "id": "OP_2",
-                "target": {**base_target},
+                "file": file_rel,
+                "symbol": symbol,
+                "lineno": lineno,
+                "end_lineno": None,
                 "code": "",
                 "description": f"Optional preamble for {target_fn.qualified_name}",
                 "enabled": True,
@@ -90,6 +92,8 @@ def build_patch_plan_bundle(
             "kind": "function",
             "lineno": target_fn.lineno,
         }
+    else:
+        target_payload = {"symbol": "", "kind": "function", "lineno": 1}
 
     explain_bundle = build_explain_llm_bundle(
         file_path,
@@ -104,14 +108,10 @@ def build_patch_plan_bundle(
         "version": 1,
         "engine_version": explain_bundle.get("engine_version", ""),
         "repo_root": explain_bundle.get("repo_root"),
-        "file": explain_bundle.get("file"),
-        "module": explain_bundle.get("module"),
+        "file": file_rel,
+        "module": explain_bundle.get("module", ""),
         "fix": fix,
         "target": target_payload,
-        "context": explain_bundle,
-        "patch_plan": {
-            "status": "draft",
-            "operations": operations,
-        },
+        "operations": operations,
     }
     return plan_bundle

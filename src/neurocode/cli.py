@@ -611,7 +611,7 @@ def main() -> None:
 
             print(json.dumps(bundle, indent=2))
         else:
-            ops = bundle.get("patch_plan", {}).get("operations", [])
+            ops = bundle.get("operations", [])
             target = bundle.get("target")
             print(
                 "[neurocode] plan-patch-llm for {file} (module={module}, target={target})".format(
@@ -623,8 +623,7 @@ def main() -> None:
             print(f"fix: {bundle.get('fix')}")
             print(f"operations: {len(ops)}")
             for op in ops:
-                tgt = op.get("target", {})
-                print(f"- {op.get('id')}: {op.get('op')} @ {tgt.get('file')}:{tgt.get('lineno')}")
+                print(f"- {op.get('id')}: {op.get('op')} @ {op.get('file')}:{op.get('lineno')}")
         sys.exit(0)
     elif args.command == "status":
         repo_path = Path(args.path).resolve()

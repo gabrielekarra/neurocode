@@ -18,9 +18,8 @@ def test_build_patch_plan_bundle(repo_with_ir: Path) -> None:
     )
     assert bundle["file"] == "package/mod_a.py"
     assert bundle["fix"] == "Add logging"
-    assert bundle["patch_plan"]["operations"]
-    assert bundle["patch_plan"]["status"] == "draft"
-    assert bundle["context"]["ir"]["module_summary"]["module"] == "package.mod_a"
+    assert bundle["operations"]
+    assert bundle["module"] == "package.mod_a"
 
 
 def test_cli_plan_and_apply_patch_plan(repo_with_ir: Path, project_root: Path, tmp_path: Path) -> None:
@@ -31,8 +30,7 @@ def test_cli_plan_and_apply_patch_plan(repo_with_ir: Path, project_root: Path, t
         symbol="package.mod_a.orchestrator",
     )
     # Fill plan
-    plan["patch_plan"]["status"] = "ready"
-    for op in plan["patch_plan"]["operations"]:
+    for op in plan["operations"]:
         op["code"] = "# added by plan"
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
@@ -76,7 +74,7 @@ def test_patch_plan_draft_errors(repo_with_ir: Path, project_root: Path, tmp_pat
         text=True,
     )
     assert result.returncode != 0
-    assert "status is not 'ready'" in result.stderr
+    assert "empty code" in result.stderr
 
 
 def test_cli_plan_patch_llm_json(repo_with_ir: Path, project_root: Path) -> None:
@@ -99,4 +97,4 @@ def test_cli_plan_patch_llm_json(repo_with_ir: Path, project_root: Path) -> None
     )
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["patch_plan"]["operations"]
+    assert payload["operations"]
