@@ -154,13 +154,13 @@ The CLI uses the same underlying functions; see `docs/ir.md` for the serialized 
 
 ## Releases
 
-- Version: `0.1.1` (see `CHANGELOG.md`).
+- Version: `0.1.2` (see `CHANGELOG.md`).
 - Build artifacts locally with `scripts/release.sh` (wheel + sdist in `dist/`); `make release` wraps it.
 - CI: GitHub Actions (`.github/workflows/ci.yml`) runs `ruff check` + `pytest` on push/PR.
 - Compatibility: Python 3.10–3.12 (see classifiers). No third-party runtime dependencies; dev tooling pinned in `[project.optional-dependencies]`.
 - Install options:
   - Developer install: `pip install -e .[dev]`
-  - User install: `pip install neurocode`
+  - User install: `pip install neurocode-ai`
   - Build from source: `python -m build` or `./scripts/release.sh` to produce wheels/sdists in `dist/`.
 
 ## High-Level Architecture

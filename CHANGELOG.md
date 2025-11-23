@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.2
+- Renamed PyPI distribution to `neurocode-ai` (CLI entrypoint remains `neurocode`); update install docs accordingly.
+
 ## 0.1.1
 - Hardened CLI behavior: explicit `--require-target` enforcement and richer status JSON (includes IR root/timestamp).
 - Added end-to-end flow test and JSON/status/target coverage to ensure CLI contract stability.
