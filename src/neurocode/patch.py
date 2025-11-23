@@ -118,6 +118,9 @@ def apply_patch(
             if current_hash != module.file_hash:
                 warnings.append(f"IR hash for {module.module_name} is stale; file changed on disk")
 
+    if require_target and not target:
+        raise RuntimeError(f"No target function found in module {module.module_name}")
+
     target_fn = _select_target_function(module, target)
     if target and target_fn is None:
         raise RuntimeError(

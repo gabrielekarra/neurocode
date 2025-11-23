@@ -4,7 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neurocode"
-version = "0.1.0"
 description = "Neural IR engine for deep, structural understanding and modification of codebases."
 authors = [{ name = "NeuroCode Team" }]
 requires-python = ">=3.10"
@@ -22,14 +21,18 @@ classifiers = [
   "License :: Other/Proprietary License",
 ]
 urls = { "Homepage" = "https://github.com/gabrielekarra/NeuroCode" }
+dynamic = ["version"]
 
 [project.optional-dependencies]
-dev = ["ruff>=0.6.0", "pytest>=8.0.0"]
+dev = ["ruff==0.6.4", "pytest==8.3.2"]
 [project.scripts]
 neurocode = "neurocode.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "neurocode.__version__" }
 
 [tool.ruff]
 target-version = "py310"
