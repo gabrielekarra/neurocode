@@ -12,6 +12,8 @@ def orchestrator(value: int) -> int:
     helper_value(value)
     helper_local()
     math.sqrt(value)
+    if value < 0:
+        raise ValueError("negative")
     task_one()
     task_two()
     task_three()

@@ -1,0 +1,6 @@
+[project]
+name = "sample-repo"
+version = "0.0.0"
+
+[project.scripts]
+sample-cli = "package.mod_b:run_task"

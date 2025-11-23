@@ -150,6 +150,8 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         has_main_guard = row.get("has_main_guard", "0") == "1"
         entry_symbol_id = _unescape_value(row.get("entry_symbol_id", ""))
         path = Path(path_str)
+        entrypoints_raw = _unescape_value(row.get("entrypoints", ""))
+        entrypoints = [e for e in entrypoints_raw.split("|") if e]
         module = ModuleIR(
             id=module_id,
             path=path,
@@ -157,6 +159,7 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
             file_hash=file_hash or None,
             has_main_guard=has_main_guard,
             entry_symbol_id=entry_symbol_id or None,
+            entrypoints=entrypoints,
             imports=[],  # Import details are not serialized; use module_import_edges instead.
             functions=[],
         )
@@ -320,12 +323,28 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
             )
         )
 
+    config_paths: list[str] = []
+    console_scripts: list[tuple[str, str]] = []
+    config_table = tables.get("config", [])
+    for row in config_table:
+        kind = row.get("kind", "")
+        value = _unescape_value(row.get("value", ""))
+        if kind == "path":
+            config_paths.append(value)
+        elif kind == "console_script":
+            if "=>" in value:
+                name, target = value.split("=>", 1)
+                console_scripts.append((name, target))
+
     return RepositoryIR(
         root=root,
         build_timestamp=build_timestamp,
         modules=modules,
         module_import_edges=module_import_edges,
         call_edges=call_edges,
+        test_mappings=[],  # populated elsewhere if needed
+        config_paths=config_paths,
+        console_scripts=console_scripts,
     )
 
 

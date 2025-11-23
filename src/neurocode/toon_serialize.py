@@ -48,12 +48,13 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
     # Modules table -------------------------------------------------------
 
     lines.append(
-        "modules[{n}]{{module_id,module_name,path,file_hash,has_main_guard,entry_symbol_id,num_functions,num_imports}}:".format(
+        "modules[{n}]{{module_id,module_name,path,file_hash,has_main_guard,entry_symbol_id,entrypoints,num_functions,num_imports}}:".format(
             n=ir.num_modules
         )
     )
     for module in ir.modules:
         path_str = str(module.path)
+        entrypoints = "|".join(module.entrypoints)
         row = ",".join(
             [
                 str(module.id),
@@ -62,6 +63,7 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
                 _escape_value(module.file_hash or ""),
                 "1" if module.has_main_guard else "0",
                 _escape_value(module.entry_symbol_id or ""),
+                _escape_value(entrypoints),
                 str(len([fn for fn in module.functions if fn.kind != "module"])),
                 str(len(module.imports)),
             ]
@@ -216,6 +218,17 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
         )
         lines.append(f"  {row}")
 
+    lines.append("")
+
+    # Config / entrypoints
+    config_paths = getattr(ir, "config_paths", [])
+    console_scripts = getattr(ir, "console_scripts", [])
+    total_config = len(config_paths) + len(console_scripts)
+    lines.append(f"config[{total_config}]{{kind,value}}:")
+    for path in config_paths:
+        lines.append(f"  path,{_escape_value(path)}")
+    for name, target in console_scripts:
+        lines.append(f"  console_script,{_escape_value(name)}=>{_escape_value(target)}")
     lines.append("")
 
     return "\n".join(lines)

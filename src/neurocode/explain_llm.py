@@ -315,6 +315,18 @@ def build_explain_llm_bundle(
         except Exception:
             continue
 
+    config_section = {
+        "pyproject_path": "pyproject.toml" if (repo_root / "pyproject.toml").is_file() else None,
+        "config_modules": [
+            {"module": m.module_name, "file": str(m.path)}
+            for m in ir.modules
+            if m.path.name in {"config.py", "settings.py", "conf.py"}
+        ],
+        "console_scripts": [
+            {"name": name, "target": target} for (name, target) in getattr(ir, "console_scripts", [])
+        ],
+    }
+
     slice_symbols: List[FunctionIR] = []
     if target_fn:
         slice_symbols.append(target_fn)
@@ -341,6 +353,7 @@ def build_explain_llm_bundle(
         "related_files": [{"path": path} for path in sorted(related_files)],
         "source_slices": source_slices,
         "truncation": trunc_info,
+        "config": config_section,
         "checks": checks,
         "semantic_neighbors": semantic_neighbors,
         "source": {"text": source_text, "language": "python", "truncated": truncated},

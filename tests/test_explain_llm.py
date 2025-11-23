@@ -50,6 +50,7 @@ def test_build_explain_llm_bundle(repo_with_ir: Path) -> None:
     slices = bundle["source_slices"]
     assert "package.mod_a:orchestrator" in slices
     assert "task_one" in slices["package.mod_a:orchestrator"]["text"]
+    assert bundle["config"]["console_scripts"]
 
 
 def test_cli_explain_llm_json(repo_with_ir: Path, project_root: Path) -> None:
