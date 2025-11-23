@@ -186,6 +186,12 @@ fanout_threshold = 15
 long_function_threshold = 80
 enabled_checks = ["UNUSED_IMPORT", "UNUSED_PARAM", "LONG_FUNCTION", "CALL_CYCLE"]
 severity_overrides = { UNUSED_FUNCTION = "WARNING" }
+
+# Embedding provider (example for OpenAI)
+[embedding]
+provider = "openai"
+model = "text-embedding-3-small"
+# api_key can be provided here or via OPENAI_API_KEY environment variable
 ```
 
 See `docs/troubleshooting.md` for common CLI issues (stale IR, exit codes, targeting).
