@@ -62,7 +62,7 @@ def build_embedding_documents(repository_ir: RepositoryIR) -> List[EmbeddingDocu
 
             docs.append(
                 EmbeddingDocument(
-                    id=fn.symbol_id or fn.qualified_name,
+                    id=fn.qualified_name,
                     module=module.module_name,
                     name=fn.name,
                     file=str(module.path),

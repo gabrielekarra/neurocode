@@ -267,7 +267,7 @@ def apply_patch(
 def _select_target_function(module: ModuleIR, target: str | None) -> FunctionIR | None:
     """Pick a function to anchor the patch (prefers explicit targets, then module-level)."""
 
-    functions = module.functions
+    functions = [fn for fn in module.functions if fn.kind != "module"]
 
     if target:
         for fn in functions:
