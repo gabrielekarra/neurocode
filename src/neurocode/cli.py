@@ -3,6 +3,14 @@ import sys
 from pathlib import Path
 
 from .check import check_file_from_disk
+from .embedding_model import (
+    EmbeddingItem,
+    EmbeddingStore,
+    load_embedding_store,
+    save_embedding_store,
+)
+from .embedding_provider import DummyEmbeddingProvider, EmbeddingProvider
+from .embedding_text import build_embedding_documents
 from .explain import explain_file_from_disk
 from .ir_build import build_repository_ir, compute_file_hash
 from .patch import apply_patch_from_disk
@@ -178,7 +186,36 @@ def main() -> None:
         default="text",
         help="Output format (default: text)",
     )
-
+    embed_parser = subparsers.add_parser(
+        "embed", help="Generate embeddings for the IR and write .neurocode/ir-embeddings.toon"
+    )
+    embed_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Path to the repository root containing .neurocode/ir.toon (default: current directory)",
+    )
+    embed_parser.add_argument(
+        "--provider",
+        default="dummy",
+        help="Embedding provider to use (default: dummy)",
+    )
+    embed_parser.add_argument(
+        "--model",
+        default="dummy-embedding-v0",
+        help="Embedding model identifier (default: dummy-embedding-v0)",
+    )
+    embed_parser.add_argument(
+        "--update",
+        action="store_true",
+        help="Merge with existing .neurocode/ir-embeddings.toon if present",
+    )
+    embed_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
     args = parser.parse_args()
 
     if args.command == "ir":
@@ -331,6 +368,91 @@ def main() -> None:
             print(output)
             sys.exit(0)
         except QueryError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
+            sys.exit(1)
+    elif args.command == "embed":
+        repo_path = Path(args.path).resolve()
+        ir_file = repo_path / ".neurocode" / "ir.toon"
+        if not ir_file.is_file():
+            print(
+                f"[neurocode] error: {ir_file} not found. Run `neurocode ir {repo_path}` first.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        try:
+            ir = load_repository_ir(ir_file)
+            docs = build_embedding_documents(ir)
+            provider: EmbeddingProvider
+            if args.provider == "dummy":
+                provider = DummyEmbeddingProvider()
+            else:
+                print(f"[neurocode] error: unknown provider: {args.provider}", file=sys.stderr)
+                sys.exit(1)
+            vectors = provider.embed_batch([doc.text for doc in docs])
+            if len(vectors) != len(docs):
+                print("[neurocode] error: provider returned mismatched embedding count", file=sys.stderr)
+                sys.exit(1)
+
+            from . import __version__
+
+            new_store = EmbeddingStore.new(repo_root=repo_path, engine_version=__version__, model=args.model)
+            new_items = []
+            for doc, vec in zip(docs, vectors):
+                new_items.append(
+                    EmbeddingItem(
+                        kind="function",
+                        id=doc.id,
+                        module=doc.module,
+                        name=doc.name,
+                        file=doc.file,
+                        lineno=doc.lineno,
+                        signature=doc.signature,
+                        docstring=doc.docstring,
+                        text=doc.text,
+                        embedding=vec,
+                    )
+                )
+            new_store.items = new_items
+
+            store_path = repo_path / ".neurocode" / "ir-embeddings.toon"
+            store_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if args.update and store_path.exists():
+                try:
+                    existing = load_embedding_store(store_path)
+                    merged = {item.id: item for item in existing.items}
+                    for item in new_items:
+                        merged[item.id] = item
+                    new_store.items = list(merged.values())
+                except Exception as exc:  # pragma: no cover - defensive
+                    print(
+                        f"[neurocode] warning: failed to load existing embeddings, overwriting ({exc})",
+                        file=sys.stderr,
+                    )
+
+            save_embedding_store(new_store, store_path)
+
+            summary = {
+                "path": str(store_path),
+                "items": len(new_store.items),
+                "model": args.model,
+                "provider": args.provider,
+            }
+            if args.format == "json":
+                import json
+
+                print(json.dumps(summary, indent=2))
+            else:
+                message = (
+                    "[neurocode] embeddings written to {path} (items={items}, "
+                    "model={model}, provider={provider})"
+                ).format(**summary)
+                print(message)
+            sys.exit(0)
+        except RuntimeError as exc:
             print(f"[neurocode] error: {exc}", file=sys.stderr)
             sys.exit(1)
         except Exception as exc:  # pragma: no cover - defensive
