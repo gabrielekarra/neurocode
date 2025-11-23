@@ -61,7 +61,10 @@ def _initial_operations(target_fn: FunctionIR | None, fix: str, file_rel: str) -
     return ops
 
 
-def _call_neighbors(ir, target_fn: FunctionIR | None) -> tuple[list[FunctionIR], list[FunctionIR], dict[tuple[int, int], int]]:
+def _call_neighbors(
+    ir,
+    target_fn: FunctionIR | None,
+) -> tuple[list[FunctionIR], list[FunctionIR], dict[tuple[int, int], int]]:
     """Return (callers, callees, callsite_map[(caller_id, callee_id)]=lineno)."""
 
     if target_fn is None:
@@ -84,7 +87,11 @@ def _call_neighbors(ir, target_fn: FunctionIR | None) -> tuple[list[FunctionIR],
     return callers, callees, callsite_map
 
 
-def _collect_source_slices(repo_root: Path, symbols: list[FunctionIR], module_paths: dict[int, Path]) -> tuple[dict, dict]:
+def _collect_source_slices(
+    repo_root: Path,
+    symbols: list[FunctionIR],
+    module_paths: dict[int, Path],
+) -> tuple[dict, dict]:
     from .explain_llm import _collect_source_slices as _collect
 
     return _collect(repo_root, symbols, module_paths)

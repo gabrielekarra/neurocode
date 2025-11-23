@@ -175,7 +175,11 @@ def _function_source_slice(
     return slice_text, truncated
 
 
-def _collect_source_slices(repo_root: Path, symbols: List[FunctionIR], module_paths: Dict[int, Path]) -> tuple[dict, dict]:
+def _collect_source_slices(
+    repo_root: Path,
+    symbols: List[FunctionIR],
+    module_paths: Dict[int, Path],
+) -> tuple[dict, dict]:
     slices: Dict[str, dict] = {}
     truncation = {"applied": False, "reason": "", "functions_included": 0}
     end_map_cache: Dict[Path, Dict[int, int]] = {}
