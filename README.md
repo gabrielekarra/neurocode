@@ -40,6 +40,29 @@ On top of this IR, NeuroCode will support:
 - API upgrades and internal interface evolution
 - intelligent test generation
 
+## First 5 minutes
+
+1) Install (no runtime deps beyond the Python stdlib):
+```bash
+pip install -e .[dev]
+```
+2) Build IR for a repo:
+```bash
+neurocode ir .
+```
+3) Check freshness and config:
+```bash
+neurocode status . --format json
+```
+4) Run checks on a file:
+```bash
+neurocode check path/to/file.py --status
+```
+5) Apply a guarded patch (idempotent; exit code 3 if already applied):
+```bash
+neurocode patch path/to/file.py --fix "describe fix" --strategy guard --show-diff
+```
+
 ## Current CLI capabilities
 
 - `neurocode ir <path>` — build IR (`.neurocode/ir.toon`) with per-file hashes and timestamp. `--check` compares hashes to disk and reports staleness without rebuilding.
@@ -103,6 +126,8 @@ enabled_checks = ["UNUSED_IMPORT", "UNUSED_PARAM", "LONG_FUNCTION", "CALL_CYCLE"
 severity_overrides = { UNUSED_FUNCTION = "WARNING" }
 ```
 
+See `docs/troubleshooting.md` for common CLI issues (stale IR, exit codes, targeting).
+
 ## Python API
 
 Importable helpers in `neurocode.api`:
@@ -129,9 +154,14 @@ The CLI uses the same underlying functions; see `docs/ir.md` for the serialized 
 
 ## Releases
 
-- Version: `0.1.0` (see `CHANGELOG.md`).
-- Build artifacts locally with `scripts/release.sh` (wheel + sdist in `dist/`).
+- Version: `0.1.2` (see `CHANGELOG.md`).
+- Build artifacts locally with `scripts/release.sh` (wheel + sdist in `dist/`); `make release` wraps it.
 - CI: GitHub Actions (`.github/workflows/ci.yml`) runs `ruff check` + `pytest` on push/PR.
+- Compatibility: Python 3.10–3.12 (see classifiers). No third-party runtime dependencies; dev tooling pinned in `[project.optional-dependencies]`.
+- Install options:
+  - Developer install: `pip install -e .[dev]`
+  - User install: `pip install neurocode-ai`
+  - Build from source: `python -m build` or `./scripts/release.sh` to produce wheels/sdists in `dist/`.
 
 ## High-Level Architecture
 

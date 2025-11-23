@@ -185,3 +185,21 @@ def test_cli_patch_fails_when_require_fresh_ir(repo_with_ir: Path, project_root:
 
     assert result.returncode != 0
     assert "older than target file" in result.stderr
+
+
+def test_cli_patch_requires_target_when_requested(repo_with_ir: Path, project_root: Path) -> None:
+    target_file = repo_with_ir / "package" / "mod_b.py"
+
+    result = _run_cli(
+        project_root,
+        "patch",
+        str(target_file),
+        "--fix",
+        "require target",
+        "--strategy",
+        "guard",
+        "--require-target",
+    )
+
+    assert result.returncode != 0
+    assert "No target function found" in result.stderr

@@ -65,6 +65,11 @@ def render_status(ir: RepositoryIR, config: Config, output_format: str = "text")
 
     if output_format == "json":
         payload = {
+            "ir": {
+                "root": str(ir.root),
+                "build_timestamp": ir.build_timestamp,
+            },
+            # Kept top-level for backward compatibility.
             "root": str(ir.root),
             "build_timestamp": ir.build_timestamp,
             "counts": counts,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -31,3 +32,13 @@ def test_cli_status_stale_detected(sample_repo: Path, project_root: Path) -> Non
     result = _run_cli(project_root, "status", str(sample_repo))
     assert result.returncode == 1
     assert "stale" in result.stdout or "missing" in result.stdout
+
+
+def test_cli_status_json_format(repo_with_ir: Path, project_root: Path) -> None:
+    result = _run_cli(project_root, "status", str(repo_with_ir), "--format", "json")
+    assert result.returncode == 0, result.stderr
+
+    payload = json.loads(result.stdout)
+    assert payload["ir"]["root"] == str(repo_with_ir.resolve())
+    assert payload["counts"]["fresh"] >= 1
+    assert payload["config"]["enabled_checks"]
