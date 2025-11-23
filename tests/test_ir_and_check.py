@@ -10,7 +10,7 @@ def test_build_repository_ir_captures_structure(sample_repo: Path) -> None:
     ir = build_repository_ir(sample_repo)
 
     module_names = {m.module_name for m in ir.modules}
-    assert module_names == {"package.mod_a", "package.mod_b", "package.classy"}
+    assert module_names == {"package.mod_a", "package.mod_b", "package.classy", "tests.test_mod_a"}
 
     mod_a = next(m for m in ir.modules if m.module_name == "package.mod_a")
     mod_b = next(m for m in ir.modules if m.module_name == "package.mod_b")
@@ -20,7 +20,7 @@ def test_build_repository_ir_captures_structure(sample_repo: Path) -> None:
     orchestrator = next(fn for fn in mod_a.functions if fn.name == "orchestrator")
     helper_local = next(fn for fn in mod_a.functions if fn.name == "helper_local")
 
-    assert len(orchestrator.calls) == 15  # orchestrator fans out heavily
+    assert len(orchestrator.calls) == 16  # orchestrator fans out heavily
     assert helper_local.calls[0].target == "helper_value"
 
     import_entries = {(imp.kind, imp.module, imp.name) for imp in mod_a.imports}
