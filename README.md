@@ -75,6 +75,7 @@ neurocode patch path/to/file.py --fix "describe fix" --strategy guard --show-dif
 - `neurocode status [path] [--format text|json]` — summarize IR freshness (hash comparison), build timestamp, and config values in one shot; exit `1` if any module is stale/missing.
 - `neurocode query <path> --kind callers|callees|fan-in|fan-out [--symbol ...] [--module ...] [--format text|json]` — IR-backed structural queries (callers/callees and fan-in/out counts).
 - `neurocode embed <path> [--provider dummy] [--model dummy-embedding-v0] [--update] [--format text|json]` — build Neural IR embeddings and store them in `.neurocode/ir-embeddings.toon`.
+- `neurocode search <path> (--text \"...\")|(--like package.module:func) [--k 10] [--module ...] [--format text|json]` — semantic search over embeddings stored in `.neurocode/ir-embeddings.toon`.
 
 ### Examples
 
@@ -112,6 +113,9 @@ neurocode query . --kind callers --symbol package.mod_b.helper_value --format js
 
 # 7) Build embeddings
 neurocode embed . --provider dummy --format text
+
+# 8) Semantic search (text)
+neurocode search . --text "request handler"
 ```
 
 ### Neural IR (Embeddings)
@@ -123,6 +127,24 @@ Examples:
 - `neurocode embed . --provider dummy --format json`
 
 Embeddings are written in TOON format (no JSON storage) and can be refreshed with `--update`.
+
+### Semantic Search (Neural IR)
+
+Use embeddings to find related functions:
+
+```bash
+# Build IR and embeddings
+neurocode ir .
+neurocode embed .
+
+# Search by text
+neurocode search . --text "http request handler"
+
+# Search for functions similar to an existing symbol
+neurocode search . --like package.mod:orchestrator --format json
+```
+
+Results reference IR entities (module, function, file/line) and can be consumed in text or JSON for agents.
 
 Custom config example:
 ```toml
