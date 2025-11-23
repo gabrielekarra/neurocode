@@ -6,7 +6,7 @@ from typing import Dict, List
 
 from .check import CheckResult, check_file
 from .config import load_config
-from .embedding_provider import DummyEmbeddingProvider
+from .embedding_provider import DummyEmbeddingProvider, make_embedding_provider
 from .explain import _find_module_for_file, _find_repo_root_for_file
 from .ir_model import FunctionIR, ModuleIR, RepositoryIR
 from .search import (
@@ -138,17 +138,22 @@ def build_explain_llm_bundle(
     semantic_neighbors: List[dict] = []
     embedding_meta: dict = {}
     try:
+        config = load_config(repo_root)
         _, store = load_ir_and_embeddings(repo_root)
         embedding_meta = {
             "model": store.model,
+            "provider": store.provider,
             "store_path": str(repo_root / ".neurocode" / "ir-embeddings.toon"),
+            "available": True,
         }
         if target_fn:
             query_embedding = build_query_embedding_from_symbol(store, target_fn.qualified_name)
         else:
-            # fallback to embedding file content
             text = file_path.read_text(encoding="utf-8")
-            provider = DummyEmbeddingProvider()
+            try:
+                provider, _, _ = make_embedding_provider(config, allow_dummy=True)
+            except RuntimeError:
+                provider = DummyEmbeddingProvider()
             query_embedding = build_query_embedding_from_text(text, provider=provider)
         neighbors = search_embeddings(
             repository_ir=ir,
@@ -171,16 +176,20 @@ def build_explain_llm_bundle(
                 }
             )
     except Exception:
-        # Missing embeddings or load failure; degrade gracefully.
-        embedding_meta = {"model": None, "store_path": None}
+        embedding_meta = {"model": None, "provider": None, "store_path": None, "available": False}
         semantic_neighbors = []
 
     # IR slice
     module_summary = _module_summary(ir, module)
 
     source_text = ""
+    truncated = False
+    SOURCE_LIMIT = 20000
     try:
         source_text = file_path.read_text(encoding="utf-8")
+        if len(source_text) > SOURCE_LIMIT:
+            source_text = source_text[:SOURCE_LIMIT]
+            truncated = True
     except OSError:
         source_text = ""
 
@@ -203,7 +212,7 @@ def build_explain_llm_bundle(
         "call_graph": call_graph,
         "checks": checks,
         "semantic_neighbors": semantic_neighbors,
-        "source": {"text": source_text, "language": "python"},
+        "source": {"text": source_text, "language": "python", "truncated": truncated},
         "embedding_metadata": embedding_meta,
     }
     try:

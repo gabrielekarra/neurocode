@@ -14,7 +14,7 @@ from neurocode.search import (
 
 
 def test_search_embeddings_rank_order(tmp_path: Path) -> None:
-    store = EmbeddingStore.new(repo_root=tmp_path, engine_version="0.0.0", model="dummy")
+    store = EmbeddingStore.new(repo_root=tmp_path, engine_version="0.0.0", model="dummy", provider="dummy")
     store.items = [
         EmbeddingItem(
             kind="function",
@@ -48,7 +48,7 @@ def test_search_embeddings_rank_order(tmp_path: Path) -> None:
 
 
 def test_search_like_uses_existing_embedding(tmp_path: Path) -> None:
-    store = EmbeddingStore.new(repo_root=tmp_path, engine_version="0.0.0", model="dummy")
+    store = EmbeddingStore.new(repo_root=tmp_path, engine_version="0.0.0", model="dummy", provider="dummy")
     store.items.append(
         EmbeddingItem(
             kind="function",

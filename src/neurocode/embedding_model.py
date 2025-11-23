@@ -68,16 +68,25 @@ class EmbeddingStore:
     version: int
     engine_version: str
     model: str
+    provider: str
     created_at: str
     repo_root: Path
     items: List[EmbeddingItem] = field(default_factory=list)
 
     @classmethod
-    def new(cls, repo_root: Path, engine_version: str, model: str, version: int = 1) -> "EmbeddingStore":
+    def new(
+        cls,
+        repo_root: Path,
+        engine_version: str,
+        model: str,
+        provider: str,
+        version: int = 1,
+    ) -> "EmbeddingStore":
         return cls(
             version=version,
             engine_version=engine_version,
             model=model,
+            provider=provider,
             created_at=datetime.now(timezone.utc).isoformat(),
             repo_root=repo_root,
             items=[],
@@ -90,6 +99,7 @@ def embedding_store_to_toon(store: EmbeddingStore) -> str:
     lines.append(f"  version: {store.version}")
     lines.append(f"  engine_version: {store.engine_version}")
     lines.append(f"  model: {store.model}")
+    lines.append(f"  provider: {store.provider}")
     lines.append(f"  created_at: {store.created_at}")
     lines.append(f"  repo_root: {store.repo_root}")
     lines.append(f"  num_items: {len(store.items)}")
@@ -170,6 +180,7 @@ def embedding_store_from_toon(text: str) -> EmbeddingStore:
         version=int(header.get("version", "1")),
         engine_version=header.get("engine_version", ""),
         model=header.get("model", ""),
+        provider=header.get("provider", ""),
         created_at=header.get("created_at", ""),
         repo_root=Path(header["repo_root"]),
         items=[],

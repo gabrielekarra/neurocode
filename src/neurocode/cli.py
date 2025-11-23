@@ -3,8 +3,9 @@ import sys
 from pathlib import Path
 
 from .check import check_file_from_disk
+from .config import load_config
 from .embedding_model import EmbeddingItem, EmbeddingStore, load_embedding_store, save_embedding_store
-from .embedding_provider import DummyEmbeddingProvider, EmbeddingProvider
+from .embedding_provider import EmbeddingProvider, make_embedding_provider
 from .embedding_text import build_embedding_documents
 from .explain import explain_file_from_disk
 from .explain_llm import build_explain_llm_bundle
@@ -454,14 +455,19 @@ def main() -> None:
             )
             sys.exit(1)
         try:
+            config = load_config(repo_path)
+            try:
+                provider, provider_name, model_name = make_embedding_provider(
+                    config,
+                    provider_override=args.provider,
+                    model_override=args.model,
+                    allow_dummy=args.provider == "dummy",
+                )
+            except RuntimeError as exc:
+                print(f"[neurocode] error: {exc}", file=sys.stderr)
+                sys.exit(1)
             ir = load_repository_ir(ir_file)
             docs = build_embedding_documents(ir)
-            provider: EmbeddingProvider
-            if args.provider == "dummy":
-                provider = DummyEmbeddingProvider()
-            else:
-                print(f"[neurocode] error: unknown provider: {args.provider}", file=sys.stderr)
-                sys.exit(1)
             vectors = provider.embed_batch([doc.text for doc in docs])
             if len(vectors) != len(docs):
                 print("[neurocode] error: provider returned mismatched embedding count", file=sys.stderr)
@@ -469,7 +475,12 @@ def main() -> None:
 
             from . import __version__
 
-            new_store = EmbeddingStore.new(repo_root=repo_path, engine_version=__version__, model=args.model)
+            new_store = EmbeddingStore.new(
+                repo_root=repo_path,
+                engine_version=__version__,
+                model=model_name,
+                provider=provider_name,
+            )
             new_items = []
             for doc, vec in zip(docs, vectors):
                 new_items.append(
@@ -494,6 +505,20 @@ def main() -> None:
             if args.update and store_path.exists():
                 try:
                     existing = load_embedding_store(store_path)
+                    if existing.model and existing.model != model_name:
+                        print(
+                            f"[neurocode] error: existing embeddings use model '{existing.model}' "
+                            f"(requested '{model_name}')",
+                            file=sys.stderr,
+                        )
+                        sys.exit(1)
+                    if existing.provider and existing.provider != provider_name:
+                        print(
+                            f"[neurocode] error: existing embeddings use provider '{existing.provider}' "
+                            f"(requested '{provider_name}')",
+                            file=sys.stderr,
+                        )
+                        sys.exit(1)
                     merged = {item.id: item for item in existing.items}
                     for item in new_items:
                         merged[item.id] = item
@@ -533,6 +558,7 @@ def main() -> None:
         repo_path = Path(args.path).resolve()
         try:
             ir, store = load_ir_and_embeddings(repo_path)
+            config = load_config(repo_path)
             requested_model = args.model
             if requested_model and store.model and store.model != requested_model:
                 msg = (
@@ -544,10 +570,31 @@ def main() -> None:
 
             provider: EmbeddingProvider | None = None
             if args.text:
-                if args.provider != "dummy":
-                    print(f"[neurocode] error: unknown provider: {args.provider}", file=sys.stderr)
+                allow_dummy = args.provider == "dummy"
+                try:
+                    provider, provider_name, model_name = make_embedding_provider(
+                        config,
+                        provider_override=args.provider,
+                        model_override=args.model or store.model,
+                        allow_dummy=allow_dummy,
+                    )
+                except RuntimeError as exc:
+                    print(f"[neurocode] error: {exc}", file=sys.stderr)
                     sys.exit(1)
-                provider = DummyEmbeddingProvider()
+                if store.model and model_name and store.model != model_name:
+                    print(
+                        f"[neurocode] error: embedding store model '{store.model}' does not match provider "
+                        f"model '{model_name}'",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
+                if store.provider and provider_name and store.provider != provider_name:
+                    print(
+                        f"[neurocode] error: embedding store provider '{store.provider}' does not match provider "
+                        f"'{provider_name}'",
+                        file=sys.stderr,
+                    )
+                    sys.exit(1)
                 query_embedding = build_query_embedding_from_text(args.text, provider=provider)
                 query_type = "text"
                 query_value = args.text

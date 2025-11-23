@@ -24,6 +24,11 @@ class Config:
         }
     )
     severity_overrides: Dict[str, str] = field(default_factory=dict)
+    embedding_provider: str | None = None
+    embedding_model: str | None = None
+    embedding_allow_dummy: bool = False
+    embedding_api_key: str | None = None
+    embedding_base_url: str | None = None
 
     def severity_for(self, code: str, default: str) -> str:
         return self.severity_overrides.get(code, default)
@@ -76,3 +81,21 @@ def _apply_config_data(config: Config, data: dict) -> None:
         for k, v in severity.items():
             if isinstance(k, str) and isinstance(v, str):
                 config.severity_overrides[k] = v.upper()
+
+    embedding = data.get("embedding", {})
+    if isinstance(embedding, dict):
+        provider = embedding.get("provider")
+        if isinstance(provider, str):
+            config.embedding_provider = provider
+        model = embedding.get("model")
+        if isinstance(model, str):
+            config.embedding_model = model
+        allow_dummy = embedding.get("allow_dummy")
+        if isinstance(allow_dummy, bool):
+            config.embedding_allow_dummy = allow_dummy
+        api_key = embedding.get("api_key")
+        if isinstance(api_key, str):
+            config.embedding_api_key = api_key
+        base_url = embedding.get("base_url")
+        if isinstance(base_url, str):
+            config.embedding_base_url = base_url
