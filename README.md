@@ -77,6 +77,7 @@ neurocode patch path/to/file.py --fix "describe fix" --strategy guard --show-dif
 - `neurocode embed <path> [--provider dummy] [--model dummy-embedding-v0] [--update] [--format text|json]` — build Neural IR embeddings and store them in `.neurocode/ir-embeddings.toon`.
 - `neurocode search <path> (--text \"...\")|(--like package.module:func) [--k 10] [--module ...] [--format text|json]` — semantic search over embeddings stored in `.neurocode/ir-embeddings.toon`.
 
+
 ### Examples
 
 Generate IR and check freshness:
@@ -116,6 +117,7 @@ neurocode embed . --provider dummy --format text
 
 # 8) Semantic search (text)
 neurocode search . --text "request handler"
+
 ```
 
 ### Neural IR (Embeddings)
@@ -145,6 +147,7 @@ neurocode search . --like package.mod:orchestrator --format json
 ```
 
 Results reference IR entities (module, function, file/line) and can be consumed in text or JSON for agents.
+
 
 Custom config example:
 ```toml

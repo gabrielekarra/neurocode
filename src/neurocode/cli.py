@@ -263,6 +263,7 @@ def main() -> None:
         default="text",
         help="Output format (default: text)",
     )
+
     args = parser.parse_args()
 
     if args.command == "ir":
@@ -574,6 +575,7 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover - defensive
             print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
             sys.exit(1)
+
     elif args.command == "status":
         repo_path = Path(args.path).resolve()
         output, exit_code = status_from_disk(repo_path, output_format=args.format)
