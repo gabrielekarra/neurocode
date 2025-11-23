@@ -61,6 +61,42 @@ def _initial_operations(target_fn: FunctionIR | None, fix: str, file_rel: str) -
     return ops
 
 
+def _call_neighbors(
+    ir,
+    target_fn: FunctionIR | None,
+) -> tuple[list[FunctionIR], list[FunctionIR], dict[tuple[int, int], int]]:
+    """Return (callers, callees, callsite_map[(caller_id, callee_id)]=lineno)."""
+
+    if target_fn is None:
+        return [], [], {}
+    fn_by_id = {fn.id: fn for m in ir.modules for fn in m.functions}
+    callers: list[FunctionIR] = []
+    callees: list[FunctionIR] = []
+    callsite_map: dict[tuple[int, int], int] = {}
+    for edge in ir.call_edges:
+        if edge.callee_function_id == target_fn.id and edge.caller_function_id in fn_by_id:
+            caller = fn_by_id[edge.caller_function_id]
+            if caller.kind != "module":
+                callers.append(caller)
+                callsite_map[(caller.id, target_fn.id)] = edge.lineno
+        if edge.caller_function_id == target_fn.id and edge.callee_function_id in fn_by_id:
+            callee = fn_by_id[edge.callee_function_id]
+            if callee.kind != "module":
+                callees.append(callee)
+                callsite_map[(target_fn.id, callee.id)] = edge.lineno
+    return callers, callees, callsite_map
+
+
+def _collect_source_slices(
+    repo_root: Path,
+    symbols: list[FunctionIR],
+    module_paths: dict[int, Path],
+) -> tuple[dict, dict]:
+    from .explain_llm import _collect_source_slices as _collect
+
+    return _collect(repo_root, symbols, module_paths)
+
+
 def build_patch_plan_bundle(
     file_path: Path,
     *,
@@ -104,8 +140,61 @@ def build_patch_plan_bundle(
         k_neighbors=k_neighbors,
     ).data
 
+    callers, callees, callsite_map = _call_neighbors(ir, target_fn)
+
     file_rel = str(file_path.relative_to(repo_root))
     operations = _initial_operations(target_fn, fix, file_rel)
+
+    module_paths: dict[int, Path] = {m.id: m.path for m in ir.modules}
+    op_counter = len(operations) + 1
+    neighbor_ops: list[dict] = []
+    for caller in callers:
+        caller_path = module_paths.get(caller.module_id)
+        if caller_path is None:
+            continue
+        call_lineno = callsite_map.get((caller.id, target_fn.id if target_fn else -1), caller.lineno)
+        neighbor_ops.append(
+            {
+                "op": "insert_before",
+                "id": f"OP_{op_counter}",
+                "file": str(caller_path),
+                "symbol": caller.symbol_id,
+                "lineno": call_lineno,
+                "end_lineno": None,
+                "code": "",
+                "description": f"Update callsite in {caller.symbol_id} for fix: {fix}",
+                "enabled": True,
+            }
+        )
+        op_counter += 1
+    for callee in callees:
+        callee_path = module_paths.get(callee.module_id)
+        if callee_path is None:
+            continue
+        neighbor_ops.append(
+            {
+                "op": "append_to_function",
+                "id": f"OP_{op_counter}",
+                "file": str(callee_path),
+                "symbol": callee.symbol_id,
+                "lineno": callee.lineno,
+                "end_lineno": None,
+                "code": "",
+                "description": f"Consider updating callee {callee.symbol_id} for fix: {fix}",
+                "enabled": True,
+            }
+        )
+        op_counter += 1
+    operations.extend(neighbor_ops)
+
+    neighbor_symbols = []
+    neighbor_symbols.extend(callers)
+    neighbor_symbols.extend(callees)
+    slice_symbols = []
+    if target_fn:
+        slice_symbols.append(target_fn)
+    slice_symbols.extend(neighbor_symbols)
+    source_slices, trunc_info = _collect_source_slices(repo_root, slice_symbols, module_paths)
 
     plan_bundle = {
         "version": 1,
@@ -115,6 +204,10 @@ def build_patch_plan_bundle(
         "module": explain_bundle.get("module", ""),
         "fix": fix,
         "target": target_payload,
+        "call_graph_neighbors": explain_bundle.get("call_graph_neighbors", {}),
+        "related_files": explain_bundle.get("related_files", []),
+        "source_slices": source_slices,
+        "truncation": trunc_info,
         "operations": operations,
     }
     return plan_bundle

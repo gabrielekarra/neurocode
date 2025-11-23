@@ -20,6 +20,9 @@ def test_build_patch_plan_bundle(repo_with_ir: Path) -> None:
     assert bundle["fix"] == "Add logging"
     assert bundle["operations"]
     assert bundle["module"] == "package.mod_a"
+    assert bundle["call_graph_neighbors"]["callees"]
+    assert any(op["file"].endswith("mod_b.py") for op in bundle["operations"])
+    assert "package.mod_a:orchestrator" in bundle["source_slices"]
 
 
 def test_cli_plan_and_apply_patch_plan(repo_with_ir: Path, project_root: Path, tmp_path: Path) -> None:
@@ -98,3 +101,5 @@ def test_cli_plan_patch_llm_json(repo_with_ir: Path, project_root: Path) -> None
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["operations"]
+    assert payload["call_graph_neighbors"]["callees"]
+    assert payload["source_slices"]

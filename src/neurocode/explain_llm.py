@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from .check import CheckResult, check_file
 from .config import load_config
@@ -27,6 +28,14 @@ def _function_by_qualified_name(ir: RepositoryIR, name: str) -> FunctionIR | Non
     for module in ir.modules:
         for fn in module.functions:
             if fn.qualified_name == name or fn.qualified_name.endswith(f".{name}"):
+                return fn
+    return None
+
+
+def _function_by_symbol_id(ir: RepositoryIR, symbol_id: str) -> FunctionIR | None:
+    for module in ir.modules:
+        for fn in module.functions:
+            if fn.symbol_id == symbol_id:
                 return fn
     return None
 
@@ -77,11 +86,25 @@ def _callers_and_callees(ir: RepositoryIR, target: FunctionIR) -> dict:
         if edge.callee_function_id == target.id:
             caller_fn = fn_by_id.get(edge.caller_function_id)
             if caller_fn:
-                callers.append({"function": caller_fn.qualified_name, "lineno": edge.lineno})
+                callers.append(
+                    {
+                        "symbol": caller_fn.symbol_id,
+                        "module": caller_fn.module,
+                        "file": str(next((m.path for m in ir.modules if m.id == caller_fn.module_id), "")),
+                        "lineno": edge.lineno,
+                    }
+                )
         if edge.caller_function_id == target.id and edge.callee_function_id is not None:
             callee_fn = fn_by_id.get(edge.callee_function_id)
             if callee_fn:
-                callees.append({"function": callee_fn.qualified_name, "lineno": edge.lineno})
+                callees.append(
+                    {
+                        "symbol": callee_fn.symbol_id,
+                        "module": callee_fn.module,
+                        "file": str(next((m.path for m in ir.modules if m.id == callee_fn.module_id), "")),
+                        "lineno": edge.lineno,
+                    }
+                )
     return {"callers": callers, "callees": callees}
 
 
@@ -102,6 +125,78 @@ def _checks_for_file(ir: RepositoryIR, repo_root: Path, file: Path) -> List[dict
             }
         )
     return checks
+
+
+def _build_end_lineno_map(file_path: Path) -> Dict[int, int]:
+    try:
+        tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
+    except Exception:
+        return {}
+    mapping: Dict[int, int] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            start = getattr(node, "lineno", None)
+            end = getattr(node, "end_lineno", None)
+            if start is not None and end is not None:
+                mapping[start] = end
+    return mapping
+
+
+def _function_source_slice(
+    fn: FunctionIR,
+    repo_root: Path,
+    module_paths: Dict[int, Path],
+    end_map_cache: Dict[Path, Dict[int, int]],
+) -> Tuple[str, bool]:
+    file_path = module_paths.get(fn.module_id)
+    if file_path is None:
+        file_path = (repo_root / fn.module.replace(".", "/")).with_suffix(".py")
+    else:
+        file_path = repo_root / file_path
+    if not file_path.exists():
+        return "", False
+    end_map = end_map_cache.get(file_path)
+    if end_map is None:
+        end_map = _build_end_lineno_map(file_path)
+        end_map_cache[file_path] = end_map
+    try:
+        lines = file_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return "", False
+    start = max(fn.lineno - 1, 0)
+    end = end_map.get(fn.lineno, len(lines))
+    end = min(end, len(lines))
+    slice_text = "\n".join(lines[start:end])
+    truncated = False
+    SOURCE_LIMIT = 40000
+    if len(slice_text) > SOURCE_LIMIT:
+        slice_text = slice_text[:SOURCE_LIMIT]
+        truncated = True
+    return slice_text, truncated
+
+
+def _collect_source_slices(
+    repo_root: Path,
+    symbols: List[FunctionIR],
+    module_paths: Dict[int, Path],
+) -> tuple[dict, dict]:
+    slices: Dict[str, dict] = {}
+    truncation = {"applied": False, "reason": "", "functions_included": 0}
+    end_map_cache: Dict[Path, Dict[int, int]] = {}
+    for fn in symbols:
+        text, truncated = _function_source_slice(fn, repo_root, module_paths, end_map_cache)
+        if not text:
+            continue
+        slices[fn.symbol_id or fn.qualified_name] = {
+            "file": str(fn.module.replace(".", "/") + ".py"),
+            "text": text,
+            "truncated": truncated,
+        }
+        if truncated:
+            truncation["applied"] = True
+            truncation["reason"] = "slice_truncated"
+        truncation["functions_included"] += 1
+    return slices, truncation
 
 
 def build_explain_llm_bundle(
@@ -131,8 +226,15 @@ def build_explain_llm_bundle(
             raise RuntimeError(f"Symbol not found in IR: {symbol}")
 
     call_graph = {}
+    neighbors_symbols: List[FunctionIR] = []
     if target_fn:
         call_graph = _callers_and_callees(ir, target_fn)
+        neighbor_ids = {n["symbol"] for n in call_graph.get("callers", []) if n.get("symbol")}
+        neighbor_ids.update({n["symbol"] for n in call_graph.get("callees", []) if n.get("symbol")})
+        for sid in neighbor_ids:
+            fn_obj = _function_by_symbol_id(ir, sid)
+            if fn_obj:
+                neighbors_symbols.append(fn_obj)
 
     checks = _checks_for_file(ir, repo_root, file_path)
 
@@ -203,6 +305,25 @@ def build_explain_llm_bundle(
             "lineno": target_fn.lineno,
         }
 
+    module_paths: Dict[int, Path] = {m.id: m.path for m in ir.modules}
+
+    related_files = {str(file_path.relative_to(repo_root))}
+    for n in neighbors_symbols:
+        try:
+            mod_path = module_paths[n.module_id]
+            related_files.add(str(mod_path))
+        except Exception:
+            continue
+
+    slice_symbols: List[FunctionIR] = []
+    if target_fn:
+        slice_symbols.append(target_fn)
+        slice_symbols.extend(neighbors_symbols)
+    else:
+        slice_symbols.extend([fn for fn in module.functions if fn.kind != "module"])
+
+    source_slices, trunc_info = _collect_source_slices(repo_root, slice_symbols, module_paths)
+
     bundle = {
         "version": 1,
         "engine_version": "",
@@ -212,6 +333,14 @@ def build_explain_llm_bundle(
         "target": target_payload,
         "ir": {"module_summary": module_summary},
         "call_graph": call_graph,
+        "call_graph_neighbors": {
+            "target": target_fn.symbol_id if target_fn else None,
+            "callers": call_graph.get("callers", []),
+            "callees": call_graph.get("callees", []),
+        },
+        "related_files": [{"path": path} for path in sorted(related_files)],
+        "source_slices": source_slices,
+        "truncation": trunc_info,
         "checks": checks,
         "semantic_neighbors": semantic_neighbors,
         "source": {"text": source_text, "language": "python", "truncated": truncated},
