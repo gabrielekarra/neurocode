@@ -13,7 +13,7 @@ from neurocode.embedding_model import (
 
 
 def test_embedding_store_roundtrip(tmp_path: Path) -> None:
-    store = EmbeddingStore.new(repo_root=tmp_path, engine_version="0.0.0", model="dummy")
+    store = EmbeddingStore.new(repo_root=tmp_path, engine_version="0.0.0", model="dummy", provider="dummy")
     store.items.append(
         EmbeddingItem(
             kind="function",
@@ -31,6 +31,7 @@ def test_embedding_store_roundtrip(tmp_path: Path) -> None:
     toon = embedding_store_to_toon(store)
     parsed = embedding_store_from_toon(toon)
     assert parsed.model == "dummy"
+    assert parsed.provider == "dummy"
     assert parsed.items[0].id == "package.mod.fn"
     assert parsed.items[0].embedding == [0.1, 0.2, 0.3]
 
