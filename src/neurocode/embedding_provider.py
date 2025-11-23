@@ -21,6 +21,7 @@ class DummyEmbeddingProvider(EmbeddingProvider):
         vectors: List[List[float]] = []
         for text in texts:
             h = hashlib.sha256(text.encode("utf-8")).digest()
+            # Expand hash deterministically to requested dimension.
             data = h * ((self.dim // len(h)) + 1)
             vals = []
             for i in range(self.dim):
