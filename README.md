@@ -120,6 +120,10 @@ neurocode search . --text "request handler"
 
 # 9) LLM-ready bundle
 neurocode explain-llm path/to/file.py --symbol package.mod:orchestrator --format json
+
+# 10) Patch plan for LLM
+neurocode plan-patch-llm path/to/file.py --fix "Add logging" --symbol package.mod:orchestrator --format json > plan_draft.json
+neurocode patch path/to/file.py --plan plan_filled.json --show-diff
 ```
 
 ### Neural IR (Embeddings)
@@ -166,6 +170,24 @@ neurocode explain-llm path/to/file.py --format json
 
 # Focus on a symbol with neighbors
 neurocode explain-llm path/to/file.py --symbol package.mod:handle --k-neighbors 8 --format json
+```
+
+### LLM Patch Planning (`plan-patch-llm`)
+
+`neurocode plan-patch-llm` builds a patch plan bundle for LLMs to fill, including IR/Neural IR context, checks, and draft operations (`insert_before`, `insert_after`, `replace_range`, `append_to_function`).
+
+Workflow:
+```bash
+# 1) Generate a draft plan
+neurocode plan-patch-llm path/to/file.py \
+  --fix "Add logging before DB calls" \
+  --symbol mypkg.db:run_query \
+  --format json > plan_draft.json
+
+# 2) Send plan_draft.json to an LLM, obtain plan_filled.json (status=ready, code fields filled)
+
+# 3) Apply the plan
+neurocode patch path/to/file.py --plan plan_filled.json --diff
 ```
 
 Custom config example:

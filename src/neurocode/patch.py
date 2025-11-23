@@ -9,6 +9,7 @@ from typing import List
 from .explain import _find_module_for_file, _find_repo_root_for_file
 from .ir_build import compute_file_hash
 from .ir_model import FunctionIR, ModuleIR, RepositoryIR
+from .patch_plan import load_patch_plan
 from .toon_parse import load_repository_ir
 
 
@@ -336,6 +337,112 @@ def _insert_guard_clause(
 
     inserted_text = "\n".join(guard_lines)
     return True, insert_at + 1, inserted_text
+
+
+# ------------------------- Patch plan application ----------------------------
+
+
+def _apply_insert(lines: List[str], lineno: int, code: str, after: bool = False) -> None:
+    idx = max(lineno - 1, 0)
+    if after:
+        idx += 1
+    snippet = code.splitlines()
+    lines[idx:idx] = snippet
+
+
+def _apply_replace(lines: List[str], lineno: int, end_lineno: int, code: str) -> None:
+    start = max(lineno - 1, 0)
+    end = max(end_lineno, lineno)
+    snippet = code.splitlines()
+    lines[start:end] = snippet
+
+
+def _find_function_end(source: str, target_lineno: int) -> int:
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return 0
+    end = 0
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.lineno == target_lineno:
+                end = getattr(node, "end_lineno", 0)
+                break
+    return end
+
+
+def apply_patch_plan_from_disk(
+    file: Path,
+    plan_path: Path,
+    *,
+    dry_run: bool = False,
+    show_diff: bool = False,
+) -> PatchResult:
+    repo_root = _find_repo_root_for_file(file)
+    if repo_root is None:
+        raise RuntimeError(
+            "Could not find .neurocode/ir.toon. Run `neurocode ir` at the repository root first."
+        )
+    plan = load_patch_plan(plan_path, expected_file=file)
+    if plan.status != "ready":
+        raise RuntimeError("Patch plan status is not 'ready'; ensure the plan is filled by an LLM.")
+
+    original_text = file.read_text(encoding="utf-8")
+    original_lines = original_text.splitlines()
+    lines = list(original_lines)
+
+    enabled_ops = [op for op in plan.operations if op.enabled]
+    # Apply from bottom to top to keep line numbers stable.
+    enabled_ops.sort(key=lambda op: (op.target.lineno, op.id), reverse=True)
+
+    for op in enabled_ops:
+        if op.op == "insert_before":
+            _apply_insert(lines, op.target.lineno, op.code, after=False)
+        elif op.op == "insert_after":
+            _apply_insert(lines, op.target.lineno, op.code, after=True)
+        elif op.op == "replace_range":
+            end_lineno = op.target.end_lineno or op.target.lineno
+            _apply_replace(lines, op.target.lineno, end_lineno, op.code)
+        elif op.op == "append_to_function":
+            source = "\n".join(lines) + "\n"
+            end_lineno = op.target.end_lineno or _find_function_end(source, op.target.lineno) or len(lines) + 1
+            _apply_insert(lines, end_lineno, op.code, after=False)
+        else:
+            raise RuntimeError(f"Unsupported op type: {op.op}")
+
+    if lines == original_lines:
+        return PatchResult(
+            file=file,
+            description=plan.fix,
+            target_function=None,
+            inserted_line=0,
+            inserted_text="",
+            summary="No changes applied (patch plan produced no diff)",
+            diff=None,
+            warnings=[],
+            no_change=True,
+        )
+
+    new_text = "\n".join(lines)
+    if original_text.endswith("\n"):
+        new_text += "\n"
+
+    diff = _render_diff(original_lines, lines, file) if (dry_run or show_diff) else None
+
+    if not dry_run:
+        file.write_text(new_text, encoding="utf-8")
+
+    return PatchResult(
+        file=file,
+        description=plan.fix,
+        target_function=None,
+        inserted_line=0,
+        inserted_text="",
+        summary=f"Applied patch plan ({len(enabled_ops)} operations)",
+        diff=diff,
+        warnings=[],
+        no_change=False,
+    )
 
 
 def _render_diff(old: List[str], new: List[str], file: Path) -> str:
