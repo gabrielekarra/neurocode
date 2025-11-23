@@ -186,7 +186,6 @@ def main() -> None:
         default="text",
         help="Output format (default: text)",
     )
-
     embed_parser = subparsers.add_parser(
         "embed", help="Generate embeddings for the IR and write .neurocode/ir-embeddings.toon"
     )
@@ -217,7 +216,6 @@ def main() -> None:
         default="text",
         help="Output format (default: text)",
     )
-
     args = parser.parse_args()
 
     if args.command == "ir":
