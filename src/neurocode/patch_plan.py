@@ -52,12 +52,19 @@ def _validate_schema(data: Mapping[str, Any]) -> None:
         _require(isinstance(obj, dict), f"{path} must be an object")
         allowed = set(schema.get("properties", {}).keys())
         required = set(schema.get("required", []))
-        for key in obj.keys():
-            _require(key in allowed, f"{path} has unknown field '{key}'")
+        additional_schema = schema.get("additionalProperties", False)
         for key in required:
             _require(key in obj, f"{path} missing required field '{key}'")
         for key, value in obj.items():
-            subschema = schema["properties"][key]
+            if key in allowed:
+                subschema = schema["properties"][key]
+            elif isinstance(additional_schema, dict):
+                subschema = additional_schema
+            elif additional_schema is True:
+                continue
+            else:
+                _require(False, f"{path} has unknown field '{key}'")
+                continue
             subtype = subschema.get("type")
             if isinstance(subtype, list):
                 valid_type = any(_matches_type(value, t) for t in subtype)
@@ -71,8 +78,9 @@ def _validate_schema(data: Mapping[str, Any]) -> None:
             if subschema.get("type") == "array":
                 _require(isinstance(value, list), f"{path}.{key} must be an array")
                 item_schema = subschema.get("items", {})
-                for idx, item in enumerate(value):
-                    _check_object(item, item_schema, f"{path}.{key}[{idx}]")
+                if item_schema:
+                    for idx, item in enumerate(value):
+                        _check_object(item, item_schema, f"{path}.{key}[{idx}]")
             if "minimum" in subschema and isinstance(value, int):
                 _require(value >= subschema["minimum"], f"{path}.{key} must be >= {subschema['minimum']}")
 
@@ -94,7 +102,13 @@ def _validate_schema(data: Mapping[str, Any]) -> None:
     _check_object(data, PATCH_PLAN_SCHEMA, "patch_plan")
 
 
-def load_patch_plan(path: Path, expected_file: Path | None = None, *, require_filled: bool = False) -> PatchPlan:
+def load_patch_plan(
+    path: Path,
+    expected_file: Path | None = None,
+    *,
+    require_filled: bool = False,
+    allow_multi_file: bool = False,
+) -> PatchPlan:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -107,7 +121,7 @@ def load_patch_plan(path: Path, expected_file: Path | None = None, *, require_fi
     repo_root = Path(data["repo_root"]).resolve()
     file_str = data["file"]
     file_path = (repo_root / file_str).resolve()
-    if expected_file is not None and file_path != expected_file.resolve():
+    if expected_file is not None and file_path != expected_file.resolve() and not allow_multi_file:
         raise RuntimeError(f"Patch plan file {file_path} does not match requested file {expected_file}")
 
     fix = data["fix"]
@@ -122,7 +136,7 @@ def load_patch_plan(path: Path, expected_file: Path | None = None, *, require_fi
         op_id = op_raw["id"]
         target_file = op_raw["file"]
         target_file_path = (repo_root / target_file).resolve()
-        if expected_file is not None and target_file_path != expected_file.resolve():
+        if expected_file is not None and target_file_path != expected_file.resolve() and not allow_multi_file:
             raise RuntimeError(
                 f"Operation target file {target_file_path} does not match requested file {expected_file}"
             )

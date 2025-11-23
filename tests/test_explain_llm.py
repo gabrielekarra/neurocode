@@ -43,6 +43,13 @@ def test_build_explain_llm_bundle(repo_with_ir: Path) -> None:
     assert bundle["checks"]  # mod_a has known diagnostics
     assert "semantic_neighbors" in bundle
     assert bundle["source"]["text"]
+    # Cross-file context
+    neighbors = bundle["call_graph_neighbors"]
+    assert neighbors["callees"]
+    assert any(item["path"].endswith("mod_b.py") for item in bundle["related_files"])
+    slices = bundle["source_slices"]
+    assert "package.mod_a:orchestrator" in slices
+    assert "task_one" in slices["package.mod_a:orchestrator"]["text"]
 
 
 def test_cli_explain_llm_json(repo_with_ir: Path, project_root: Path) -> None:
@@ -65,4 +72,6 @@ def test_cli_explain_llm_json(repo_with_ir: Path, project_root: Path) -> None:
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert payload["module"] == "package.mod_a"
-    assert "call_graph" in payload
+    assert "call_graph_neighbors" in payload
+    assert payload["call_graph_neighbors"]["callees"]
+    assert payload["source_slices"]

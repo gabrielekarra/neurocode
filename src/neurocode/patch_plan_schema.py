@@ -25,6 +25,73 @@ PATCH_PLAN_SCHEMA: dict = {
         "file": {"type": "string"},
         "module": {"type": "string"},
         "fix": {"type": "string"},
+        "related_files": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["path"],
+                "properties": {"path": {"type": "string"}},
+            },
+        },
+        "call_graph_neighbors": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["callers", "callees"],
+            "properties": {
+                "target": {"type": ["string", "null"]},
+                "callers": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["symbol", "module", "file", "lineno"],
+                        "properties": {
+                            "symbol": {"type": "string"},
+                            "module": {"type": "string"},
+                            "file": {"type": "string"},
+                            "lineno": {"type": "integer", "minimum": 1},
+                        },
+                    },
+                },
+                "callees": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": ["symbol", "module", "file", "lineno"],
+                        "properties": {
+                            "symbol": {"type": "string"},
+                            "module": {"type": "string"},
+                            "file": {"type": "string"},
+                            "lineno": {"type": "integer", "minimum": 1},
+                        },
+                    },
+                },
+            },
+        },
+        "source_slices": {
+            "type": "object",
+            "additionalProperties": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["file", "text"],
+                "properties": {
+                    "file": {"type": "string"},
+                    "text": {"type": "string"},
+                    "truncated": {"type": "boolean"},
+                },
+            },
+        },
+        "truncation": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "applied": {"type": "boolean"},
+                "reason": {"type": "string"},
+                "functions_included": {"type": "integer", "minimum": 0},
+            },
+        },
         "target": {
             "type": "object",
             "additionalProperties": False,
