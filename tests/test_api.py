@@ -36,14 +36,13 @@ def test_api_search_and_plan(repo_with_ir: Path) -> None:
     results = project.search_code(text="value helper", provider="dummy", k=3)
     assert results
     plan = project.plan_patch_llm(repo_with_ir / "package" / "mod_a.py", fix="add logging")
-    assert plan.data["patch_plan"]["status"] == "draft"
+    assert plan.data["operations"]
 
 
 def test_api_apply_patch_plan(repo_with_ir: Path, tmp_path: Path) -> None:
     project = open_project(repo_with_ir)
     plan = project.plan_patch_llm(repo_with_ir / "package" / "mod_a.py", fix="add comment")
-    plan.data["patch_plan"]["status"] = "ready"
-    for op in plan.data["patch_plan"]["operations"]:
+    for op in plan.data["operations"]:
         op["code"] = "# patched"
     result = project.apply_patch_plan(plan, dry_run=True)
     assert "# patched" in result.diff
