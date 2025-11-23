@@ -73,6 +73,7 @@ neurocode patch path/to/file.py --fix "describe fix" --strategy guard --show-dif
   - Targeting (`--target`, `--require-target`), inject options (`--inject-kind`, `--inject-message`), dry-run/diff, stale IR enforcement (`--require-fresh-ir`).
   - Idempotent via `# neurocode:*` markers; exit code `3` when no change. `--format json` emits structured result (status, diff, warnings, exit_code).
 - `neurocode status [path] [--format text|json]` — summarize IR freshness (hash comparison), build timestamp, and config values in one shot; exit `1` if any module is stale/missing.
+- `neurocode query <path> --kind callers|callees|fan-in|fan-out [--symbol ...] [--module ...] [--format text|json]` — IR-backed structural queries (callers/callees and fan-in/out counts).
 
 ### Examples
 
@@ -104,6 +105,9 @@ neurocode explain path/to/file.py --format json | jq .
 
 # 5) Apply a patch (dry-run JSON)
 neurocode patch path/to/file.py --fix "describe fix" --strategy guard --dry-run --format json --show-diff
+
+# 6) Query structure (callers)
+neurocode query . --kind callers --symbol package.mod_b.helper_value --format json | jq .
 ```
 
 Custom config example:

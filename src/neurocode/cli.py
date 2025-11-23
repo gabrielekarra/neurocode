@@ -6,6 +6,7 @@ from .check import check_file_from_disk
 from .explain import explain_file_from_disk
 from .ir_build import build_repository_ir, compute_file_hash
 from .patch import apply_patch_from_disk
+from .query import QueryError, render_query_result, run_query
 from .status import status_from_disk
 from .toon_parse import load_repository_ir
 from .toon_serialize import repository_ir_to_toon
@@ -147,6 +148,37 @@ def main() -> None:
         help="Output format (default: text)",
     )
 
+    query_parser = subparsers.add_parser(
+        "query", help="Run structural queries against an existing IR"
+    )
+    query_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Path to the repository root containing .neurocode/ir.toon (default: current directory)",
+    )
+    query_parser.add_argument(
+        "--kind",
+        required=True,
+        choices=["callers", "callees", "fan-in", "fan-out"],
+        help="Query kind to run",
+    )
+    query_parser.add_argument(
+        "--symbol",
+        help="Target function symbol (qualified name preferred) for callers/callees",
+    )
+    query_parser.add_argument(
+        "--module",
+        dest="module_filter",
+        help="Restrict query scope to a module (name or path)",
+    )
+    query_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "ir":
@@ -275,8 +307,35 @@ def main() -> None:
                 print("[neurocode] note: patch already existed; no change applied.")
             if (args.dry_run or args.show_diff) and result.diff:
                 print(result.diff)
-        if result.no_change and not args.dry_run:
-            sys.exit(3)
+            if result.no_change and not args.dry_run:
+                sys.exit(3)
+    elif args.command == "query":
+        repo_path = Path(args.path).resolve()
+        ir_file = repo_path / ".neurocode" / "ir.toon"
+        if not ir_file.is_file():
+            print(
+                f"[neurocode] error: {ir_file} not found. Run `neurocode ir {repo_path}` first.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        try:
+            ir = load_repository_ir(ir_file)
+            result = run_query(
+                ir=ir,
+                repo_root=repo_path,
+                kind=args.kind,
+                symbol=args.symbol,
+                module_filter=args.module_filter,
+            )
+            output = render_query_result(result, output_format=args.format)
+            print(output)
+            sys.exit(0)
+        except QueryError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
+            sys.exit(1)
     elif args.command == "status":
         repo_path = Path(args.path).resolve()
         output, exit_code = status_from_disk(repo_path, output_format=args.format)
