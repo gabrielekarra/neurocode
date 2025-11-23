@@ -23,7 +23,7 @@ def test_build_explain_llm_bundle(repo_with_ir: Path) -> None:
 
     # Build embeddings using the CLI
     subprocess.run(
-        [sys.executable, "-m", "neurocode.cli", "embed", str(repo_with_ir)],
+        [sys.executable, "-m", "neurocode.cli", "embed", str(repo_with_ir), "--provider", "dummy"],
         check=True,
         capture_output=True,
         text=True,
@@ -47,7 +47,7 @@ def test_build_explain_llm_bundle(repo_with_ir: Path) -> None:
 
 def test_cli_explain_llm_json(repo_with_ir: Path, project_root: Path) -> None:
     subprocess.run(
-        [sys.executable, "-m", "neurocode.cli", "embed", str(repo_with_ir)],
+        [sys.executable, "-m", "neurocode.cli", "embed", str(repo_with_ir), "--provider", "dummy"],
         check=True,
         capture_output=True,
         text=True,

@@ -19,6 +19,13 @@ class DummyEmbeddingProvider(EmbeddingProvider):
     def __init__(self, dim: int = 64) -> None:
         self.dim = dim
 
+    @staticmethod
+    def _normalize(vec: List[float]) -> List[float]:
+        norm = sum(v * v for v in vec) ** 0.5
+        if norm == 0:
+            return vec
+        return [v / norm for v in vec]
+
     def embed_batch(self, texts: Sequence[str]) -> List[List[float]]:
         vectors: List[List[float]] = []
         for text in texts:
@@ -28,7 +35,7 @@ class DummyEmbeddingProvider(EmbeddingProvider):
             for i in range(self.dim):
                 b = data[i]
                 vals.append((b % 256) / 255.0)
-            vectors.append(vals)
+            vectors.append(self._normalize(vals))
         return vectors
 
 
@@ -40,6 +47,13 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self.api_key = api_key
         self.base_url = base_url or "https://api.openai.com/v1/embeddings"
         self.dim = dim
+
+    @staticmethod
+    def _normalize(vec: List[float]) -> List[float]:
+        norm = sum(v * v for v in vec) ** 0.5
+        if norm == 0:
+            return vec
+        return [v / norm for v in vec]
 
     def embed_batch(self, texts: Sequence[str]) -> List[List[float]]:
         import json
@@ -67,9 +81,12 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                     resp_data = resp.read()
                 parsed = json.loads(resp_data.decode("utf-8"))
                 embeddings = [item["embedding"] for item in parsed.get("data", [])]
-                if self.dim:
-                    embeddings = [vec[: self.dim] for vec in embeddings]
-                return embeddings
+                processed: List[List[float]] = []
+                for vec in embeddings:
+                    if self.dim:
+                        vec = vec[: self.dim]
+                    processed.append(self._normalize([float(v) for v in vec]))
+                return processed
             except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
                 last_error = exc
                 time.sleep(2**attempts * 0.1)
@@ -93,8 +110,20 @@ def make_embedding_provider(
     model_override: str | None = None,
     allow_dummy: bool = False,
 ) -> tuple[EmbeddingProvider, str, str]:
-    provider_name = provider_override or getattr(config, "embedding_provider", None) or "dummy"
-    model_name = model_override or getattr(config, "embedding_model", None) or "dummy-embedding-v0"
+    provider_name = provider_override or getattr(config, "embedding_provider", None)
+    model_name = model_override or getattr(config, "embedding_model", None)
+
+    if provider_name is None:
+        if allow_dummy or getattr(config, "embedding_allow_dummy", False):
+            provider_name = "dummy"
+        else:
+            raise RuntimeError(
+                "No embedding provider configured. Set embedding.provider in config "
+                "or pass --provider dummy explicitly."
+            )
+
+    if model_name is None:
+        model_name = "dummy-embedding-v0" if provider_name == "dummy" else "text-embedding-3-small"
 
     if provider_name == "dummy":
         if not allow_dummy and not getattr(config, "embedding_allow_dummy", False):
