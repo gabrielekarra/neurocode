@@ -39,7 +39,10 @@ def build_embedding_documents(repository_ir: RepositoryIR) -> List[EmbeddingDocu
             outgoing[caller].append(edge.target)
 
     for module in sorted(repository_ir.modules, key=lambda m: m.module_name):
-        for fn in sorted(module.functions, key=lambda f: f.lineno):
+        for fn in sorted(
+            [f for f in module.functions if f.kind != "module"],
+            key=lambda f: f.lineno,
+        ):
             signature = f"def {fn.qualified_name}(...)"  # args not in IR; placeholder
             docstring = None
             calls = sorted(set(outgoing.get(fn.id, [])))

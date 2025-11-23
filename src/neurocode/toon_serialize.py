@@ -48,7 +48,7 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
     # Modules table -------------------------------------------------------
 
     lines.append(
-        "modules[{n}]{{module_id,module_name,path,file_hash,num_functions,num_imports}}:".format(
+        "modules[{n}]{{module_id,module_name,path,file_hash,has_main_guard,entry_symbol_id,num_functions,num_imports}}:".format(
             n=ir.num_modules
         )
     )
@@ -60,7 +60,9 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
                 _escape_value(module.module_name),
                 _escape_value(path_str),
                 _escape_value(module.file_hash or ""),
-                str(len(module.functions)),
+                "1" if module.has_main_guard else "0",
+                _escape_value(module.entry_symbol_id or ""),
+                str(len([fn for fn in module.functions if fn.kind != "module"])),
                 str(len(module.imports)),
             ]
         )
@@ -71,7 +73,7 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
 
     all_classes = [cls for module in ir.modules for cls in module.classes]
     lines.append(
-        "classes[{n}]{{class_id,module_id,name,qualified_name,lineno,base_names,num_methods}}:".format(
+        "classes[{n}]{{class_id,module_id,name,qualified_name,module,symbol_id,lineno,base_names,num_methods}}:".format(
             n=len(all_classes)
         )
     )
@@ -83,6 +85,8 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
                 str(cls.module_id),
                 _escape_value(cls.name),
                 _escape_value(cls.qualified_name),
+                _escape_value(cls.module),
+                _escape_value(cls.symbol_id),
                 str(cls.lineno),
                 _escape_value(base_names),
                 str(len(cls.methods)),
@@ -120,7 +124,7 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
 
     all_functions = [fn for m in ir.modules for fn in m.functions]
     lines.append(
-        "functions[{n}]{{function_id,module_id,name,qualified_name,lineno,parent_class_id,parent_class_qualified_name,num_calls}}:".format(
+        "functions[{n}]{{function_id,module_id,name,qualified_name,module,qualname,symbol_id,kind,is_entrypoint,lineno,parent_class_id,parent_class_qualified_name,num_calls}}:".format(
             n=len(all_functions)
         )
     )
@@ -133,6 +137,11 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
                 str(fn.module_id),
                 _escape_value(fn.name),
                 _escape_value(fn.qualified_name),
+                _escape_value(fn.module),
+                _escape_value(fn.qualname),
+                _escape_value(fn.symbol_id),
+                _escape_value(fn.kind),
+                "1" if fn.is_entrypoint else "0",
                 str(fn.lineno),
                 parent_class_id,
                 parent_class_name,
@@ -189,7 +198,7 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
     # Call graph edges table ----------------------------------------------
 
     lines.append(
-        "call_graph[{n}]{{caller_function_id,callee_function_id,lineno,target}}:".format(
+        "call_graph[{n}]{{caller_function_id,callee_function_id,caller_symbol_id,callee_symbol_id,lineno,target}}:".format(
             n=len(ir.call_edges)
         )
     )
@@ -199,6 +208,8 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
             [
                 str(edge.caller_function_id),
                 callee,
+                _escape_value(edge.caller_symbol_id),
+                _escape_value(edge.callee_symbol_id or ""),
                 str(edge.lineno),
                 _escape_value(edge.target),
             ]

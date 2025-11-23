@@ -21,6 +21,7 @@ class CallIR:
 
     lineno: int
     target: str  # textual representation like "foo", "mod.func", "obj.method"
+    in_entrypoint: bool = False  # True when call is from module-level/__main__
 
 
 @dataclass
@@ -43,6 +44,8 @@ class CallEdgeIR:
     callee_function_id: int | None
     lineno: int
     target: str
+    caller_symbol_id: str
+    callee_symbol_id: str | None
 
 
 @dataclass
@@ -54,6 +57,11 @@ class FunctionIR:
     name: str
     qualified_name: str
     lineno: int
+    module: str = ""
+    qualname: str = ""
+    symbol_id: str = ""
+    kind: str = "function"  # function|method|module
+    is_entrypoint: bool = False
     parent_class_id: int | None = None
     parent_class_qualified_name: str | None = None
     calls: List[CallIR] = field(default_factory=list)
@@ -68,6 +76,8 @@ class ClassIR:
     name: str
     qualified_name: str
     lineno: int
+    module: str = ""
+    symbol_id: str = ""
     base_names: List[str] = field(default_factory=list)
     methods: List[FunctionIR] = field(default_factory=list)
 
@@ -80,6 +90,8 @@ class ModuleIR:
     path: Path  # path relative to the repository root
     module_name: str
     file_hash: str | None = None
+    has_main_guard: bool = False
+    entry_symbol_id: str | None = None
     classes: List[ClassIR] = field(default_factory=list)
     imports: List[ImportIR] = field(default_factory=list)
     functions: List[FunctionIR] = field(default_factory=list)
@@ -110,7 +122,7 @@ class RepositoryIR:
 
     @property
     def num_functions(self) -> int:
-        return sum(len(m.functions) for m in self.modules)
+        return sum(len([fn for fn in m.functions if fn.kind != "module"]) for m in self.modules)
 
     @property
     def num_calls(self) -> int:

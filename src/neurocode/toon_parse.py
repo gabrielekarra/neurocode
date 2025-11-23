@@ -147,12 +147,16 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         module_name = _unescape_value(row["module_name"])
         path_str = _unescape_value(row["path"])
         file_hash = _unescape_value(row.get("file_hash", ""))
+        has_main_guard = row.get("has_main_guard", "0") == "1"
+        entry_symbol_id = _unescape_value(row.get("entry_symbol_id", ""))
         path = Path(path_str)
         module = ModuleIR(
             id=module_id,
             path=path,
             module_name=module_name,
             file_hash=file_hash or None,
+            has_main_guard=has_main_guard,
+            entry_symbol_id=entry_symbol_id or None,
             imports=[],  # Import details are not serialized; use module_import_edges instead.
             functions=[],
         )
@@ -170,6 +174,8 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         module = modules_by_id[module_id]
         name = _unescape_value(row["name"])
         qualified_name = _unescape_value(row["qualified_name"])
+        module_name = _unescape_value(row.get("module", module.module_name))
+        symbol_id = _unescape_value(row.get("symbol_id", ""))
         lineno = int(row["lineno"])
         base_names_raw = _unescape_value(row.get("base_names", ""))
         base_names = [value for value in base_names_raw.split("|") if value]
@@ -178,9 +184,13 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
             module_id=module_id,
             name=name,
             qualified_name=qualified_name,
+            module=module_name or module.module_name,
+            symbol_id=symbol_id or "",
             lineno=lineno,
             base_names=base_names,
         )
+        if not cls.symbol_id:
+            cls.symbol_id = f"{cls.module}:{cls.qualified_name.split('.',1)[-1]}"
         module.classes.append(cls)
         classes_by_id[class_id] = cls
 
@@ -214,6 +224,11 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         module = modules_by_id[module_id]
         name = _unescape_value(row["name"])
         qualified_name = _unescape_value(row["qualified_name"])
+        module_name = _unescape_value(row.get("module", module.module_name))
+        qualname = _unescape_value(row.get("qualname", ""))
+        symbol_id = _unescape_value(row.get("symbol_id", ""))
+        kind = _unescape_value(row.get("kind", "function"))
+        is_entrypoint = row.get("is_entrypoint", "0") == "1"
         lineno = int(row["lineno"])
 
         parent_class_raw = row.get("parent_class_id", "")
@@ -221,15 +236,28 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         parent_class_qual = _unescape_value(row.get("parent_class_qualified_name", ""))
         parent_class_qualified_name = parent_class_qual or None
 
+        if not qualname:
+            # Strip module prefix if present
+            if qualified_name.startswith(f"{module_name}."):
+                qualname = qualified_name[len(module_name) + 1 :]
+            else:
+                qualname = qualified_name
         fn = FunctionIR(
             id=function_id,
             module_id=module_id,
             name=name,
             qualified_name=qualified_name,
             lineno=lineno,
+            module=module_name or module.module_name,
+            qualname=qualname,
+            symbol_id=symbol_id or "",
+            kind=kind or "function",
+            is_entrypoint=is_entrypoint,
             parent_class_id=parent_class_id,
             parent_class_qualified_name=parent_class_qualified_name,
         )
+        if not fn.symbol_id:
+            fn.symbol_id = f"{fn.module}:{fn.qualname}"
         module.functions.append(fn)
         if parent_class_id is not None:
             cls = classes_by_id.get(parent_class_id)
@@ -270,12 +298,25 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         callee_id = int(callee_raw) if callee_raw not in {"", None} else None
         lineno = int(row["lineno"])
         target = _unescape_value(row["target"])
+        caller_symbol_id = _unescape_value(row.get("caller_symbol_id", ""))
+        callee_symbol_id = _unescape_value(row.get("callee_symbol_id", ""))
+        caller_fn = functions_by_id.get(caller_id)
+        resolved_caller_symbol = caller_symbol_id or (caller_fn.symbol_id if caller_fn else "")
+        resolved_callee_symbol: str | None
+        if callee_symbol_id:
+            resolved_callee_symbol = callee_symbol_id
+        elif callee_id is not None and callee_id in functions_by_id:
+            resolved_callee_symbol = functions_by_id[callee_id].symbol_id
+        else:
+            resolved_callee_symbol = None
         call_edges.append(
             CallEdgeIR(
                 caller_function_id=caller_id,
                 callee_function_id=callee_id,
                 lineno=lineno,
                 target=target,
+                caller_symbol_id=resolved_caller_symbol,
+                callee_symbol_id=resolved_callee_symbol,
             )
         )
 

@@ -78,6 +78,10 @@ class _IRVisitor(ast.NodeVisitor):
         self._next_function_id = 0
         self._current_stack: List[_FunctionContext] = []
         self._class_stack: List[_ClassContext] = []
+        self.module_calls: List[CallIR] = []
+        self.main_guard_calls: List[CallIR] = []
+        self.has_main_guard: bool = False
+        self._in_main_guard_stack: List[bool] = []
 
     # Imports -------------------------------------------------------------
 
@@ -115,6 +119,7 @@ class _IRVisitor(ast.NodeVisitor):
         ancestor_names = [ctx.class_ir.name for ctx in self._class_stack]
         path_parts = [self.module_name, *ancestor_names, node.name]
         qualified_name = ".".join(path_parts)
+        class_qualname = ".".join([*ancestor_names, node.name]) if ancestor_names else node.name
         base_names = [render_base_name(base) for base in node.bases]
 
         class_ir = ClassIR(
@@ -122,6 +127,8 @@ class _IRVisitor(ast.NodeVisitor):
             module_id=self.module_id,
             name=node.name,
             qualified_name=qualified_name,
+            module=self.module_name,
+            symbol_id=_make_symbol_id(self.module_name, class_qualname),
             lineno=node.lineno,
             base_names=[name for name in base_names if name],
         )
@@ -150,19 +157,27 @@ class _IRVisitor(ast.NodeVisitor):
         class_names = [ctx.class_ir.name for ctx in self._class_stack]
         if class_names:
             qualified_name = ".".join([self.module_name, *class_names, name])
+            qualname = ".".join([*class_names, name])
             parent_class = self._class_stack[-1].class_ir
             parent_class_id = parent_class.id
             parent_class_qualified = parent_class.qualified_name
+            kind = "method"
         else:
             qualified_name = f"{self.module_name}.{name}"
+            qualname = name
             parent_class_id = None
             parent_class_qualified = None
+            kind = "function"
 
         fn_ir = FunctionIR(
             id=func_id,
             module_id=self.module_id,
             name=name,
             qualified_name=qualified_name,
+            module=self.module_name,
+            qualname=qualname,
+            symbol_id=_make_symbol_id(self.module_name, qualname),
+            kind=kind,
             lineno=node.lineno,  # type: ignore[attr-defined]
             parent_class_id=parent_class_id,
             parent_class_qualified_name=parent_class_qualified,
@@ -178,12 +193,28 @@ class _IRVisitor(ast.NodeVisitor):
             self.functions.append(fn_ir)
 
     def visit_Call(self, node: ast.Call) -> None:  # type: ignore[override]
+        target = render_call_target(node.func)
         if self._current_stack:
-            target = render_call_target(node.func)
             self._current_stack[-1].function.calls.append(
                 CallIR(lineno=node.lineno, target=target)
             )
+        else:
+            in_main = any(self._in_main_guard_stack)
+            call = CallIR(lineno=node.lineno, target=target, in_entrypoint=in_main)
+            self.module_calls.append(call)
+            if in_main:
+                self.main_guard_calls.append(call)
         self.generic_visit(node)
+
+    def visit_If(self, node: ast.If) -> None:  # type: ignore[override]
+        is_main_guard = _is_main_guard(node.test)
+        if is_main_guard:
+            self.has_main_guard = True
+        self._in_main_guard_stack.append(is_main_guard)
+        try:
+            self.generic_visit(node)
+        finally:
+            self._in_main_guard_stack.pop()
 
 
 def render_call_target(node: ast.AST) -> str:
@@ -255,6 +286,8 @@ def build_repository_ir(root: Path) -> RepositoryIR:
     next_class_id = 0
 
     # First pass: build per-module IR (imports, functions, call sites).
+    module_extras: Dict[int, Dict[str, object]] = {}
+
     for rel_path in rel_paths:
         abs_path = root / rel_path
         try:
@@ -290,8 +323,13 @@ def build_repository_ir(root: Path) -> RepositoryIR:
             classes=visitor.classes,
             imports=visitor.imports,
             functions=visitor.functions,
+            has_main_guard=visitor.has_main_guard,
         )
         modules.append(module_ir)
+        module_extras[module_id] = {
+            "module_calls": visitor.module_calls,
+            "main_guard_calls": visitor.main_guard_calls,
+        }
         module_id += 1
 
     # Second pass: assign repository-wide unique function IDs.
@@ -299,13 +337,48 @@ def build_repository_ir(root: Path) -> RepositoryIR:
     for module in modules:
         for fn in module.functions:
             fn.id = next_function_id
+            fn.module = module.module_name
+            if fn.parent_class_id is not None:
+                fn.kind = "method"
+            else:
+                fn.kind = "function"
+            if not fn.qualname:
+                # qualname excludes module prefix
+                if fn.parent_class_qualified_name:
+                    base = fn.parent_class_qualified_name.split(".", 1)[-1]
+                    fn.qualname = f"{base}.{fn.name}"
+                else:
+                    fn.qualname = fn.name
+            fn.symbol_id = _make_symbol_id(module.module_name, fn.qualname)
+            fn.id = next_function_id
             next_function_id += 1
+
+    # Add module entry pseudo-functions to anchor module-level calls and main guards.
+    for module in modules:
+        entry_fn = FunctionIR(
+            id=next_function_id,
+            module_id=module.id,
+            name="<module>",
+            qualified_name=f"{module.module_name}.<module>",
+            lineno=1,
+            module=module.module_name,
+            qualname="<module>",
+            symbol_id=_make_symbol_id(module.module_name, "<module>"),
+            kind="module",
+            is_entrypoint=True,
+        )
+        next_function_id += 1
+        module.functions.append(entry_fn)
+        module.entry_symbol_id = entry_fn.symbol_id
 
     # Build indexes for resolution.
     function_by_qualified: Dict[str, FunctionIR] = {}
+    function_by_symbol_id: Dict[str, FunctionIR] = {}
     for module in modules:
         for fn in module.functions:
             function_by_qualified[fn.qualified_name] = fn
+            if fn.symbol_id:
+                function_by_symbol_id[fn.symbol_id] = fn
 
     # Module import edges (module -> imported module name).
     module_import_edge_pairs: set[Tuple[int, str]] = set()
@@ -392,86 +465,135 @@ def build_repository_ir(root: Path) -> RepositoryIR:
                         stack.append(base_cls)
             return ordered
 
+        def _resolve_call_target(target: str, caller: FunctionIR) -> FunctionIR | None:
+            # 1) Fully-qualified function name.
+            fn_obj = function_by_qualified.get(target)
+            if fn_obj is not None:
+                return fn_obj
+
+            # 2) Symbol id-like string (module:qualname).
+            if ":" in target and target in function_by_symbol_id:
+                return function_by_symbol_id[target]
+
+            # 3) Local function in the same module.
+            for candidate in module.functions:
+                if candidate.name == target or candidate.qualname == target:
+                    return candidate
+
+            # 3b) Methods referenced via self/cls.
+            if "." in target and caller.parent_class_id is not None:
+                owning_class = class_by_id.get(caller.parent_class_id)
+                if owning_class is not None:
+                    prefix, rest = target.split(".", 1)
+                    method_name: str | None = None
+                    candidate_classes: List[ClassIR] = []
+                    hierarchy = _iter_class_hierarchy(owning_class)
+                    if prefix in {"self", "cls"}:
+                        method_name = rest.split(".", 1)[0]
+                        candidate_classes.extend(hierarchy)
+                    elif prefix.startswith("super()") or prefix.startswith("super("):
+                        method_name = rest.split(".", 1)[0]
+                        candidate_classes.extend(hierarchy[1:])
+                    if method_name:
+                        for candidate_cls in candidate_classes:
+                            qualified = f"{candidate_cls.qualified_name}.{method_name}"
+                            fn_obj = function_by_qualified.get(qualified)
+                            if fn_obj is not None:
+                                return fn_obj
+
+            # 4) Imported function via "from module import name".
+            if target in func_imports:
+                imported_module, original_name = func_imports[target]
+                if imported_module:
+                    qualified = f"{imported_module}.{original_name}"
+                    fn_obj = function_by_qualified.get(qualified)
+                    if fn_obj is not None:
+                        return fn_obj
+                    symbol_id = _make_symbol_id(imported_module, original_name)
+                    fn_obj = function_by_symbol_id.get(symbol_id)
+                    if fn_obj is not None:
+                        return fn_obj
+
+            # 5) Module alias + attribute: alias.func
+            if "." in target:
+                prefix, rest = target.split(".", 1)
+                if prefix in module_aliases:
+                    imported_module = module_aliases[prefix]
+                    func_name = rest.split(".", 1)[0]
+                    qualified = f"{imported_module}.{func_name}"
+                    fn_obj = function_by_qualified.get(qualified)
+                    if fn_obj is not None:
+                        return fn_obj
+                    symbol_id = _make_symbol_id(imported_module, func_name)
+                    fn_obj = function_by_symbol_id.get(symbol_id)
+                    if fn_obj is not None:
+                        return fn_obj
+
+            # 6) Direct class reference: ClassName.method
+            if "." in target:
+                class_expr, method_expr = target.rsplit(".", 1)
+                cls = class_lookup.get(class_expr)
+                if cls is not None:
+                    method_name = method_expr.split(".", 1)[0]
+                    qualified = f"{cls.qualified_name}.{method_name}"
+                    fn_obj = function_by_qualified.get(qualified)
+                    if fn_obj is not None:
+                        return fn_obj
+                    symbol_id = _make_symbol_id(cls.module, f"{cls.qualified_name.split('.',1)[-1]}.{method_name}")
+                    fn_obj = function_by_symbol_id.get(symbol_id)
+                    if fn_obj is not None:
+                        return fn_obj
+
+            # 7) Best-effort: dotted string with module prefix.
+            if "." in target:
+                parts = target.split(".")
+                if len(parts) >= 2:
+                    module_part = ".".join(parts[:-1])
+                    qual_part = parts[-1]
+                    symbol_candidate = _make_symbol_id(module_part, qual_part)
+                    fn_obj = function_by_symbol_id.get(symbol_candidate)
+                    if fn_obj is not None:
+                        return fn_obj
+                    qualified = f"{module_part}.{qual_part}"
+                    fn_obj = function_by_qualified.get(qualified)
+                    if fn_obj is not None:
+                        return fn_obj
+            return None
+
+        # Regular function bodies
         for fn in module.functions:
+            if fn.kind == "module":
+                continue
             for call in fn.calls:
                 target = call.target
-                callee_id: int | None = None
-
-                # 1) Fully-qualified function name.
-                fn_obj = function_by_qualified.get(target)
-                if fn_obj is not None:
-                    callee_id = fn_obj.id
-
-                # 2) Local function in the same module.
-                if callee_id is None:
-                    for candidate in module.functions:
-                        if candidate.name == target:
-                            callee_id = candidate.id
-                            break
-
-                # 2b) Methods referenced via self/cls.
-                if (
-                    callee_id is None
-                    and "." in target
-                    and fn.parent_class_id is not None
-                ):
-                    owning_class = class_by_id.get(fn.parent_class_id)
-                    if owning_class is not None:
-                        prefix, rest = target.split(".", 1)
-                        method_name: str | None = None
-                        candidate_classes: List[ClassIR] = []
-                        hierarchy = _iter_class_hierarchy(owning_class)
-                        if prefix in {"self", "cls"}:
-                            method_name = rest.split(".", 1)[0]
-                            candidate_classes.extend(hierarchy)
-                        elif prefix.startswith("super()") or prefix.startswith("super("):
-                            method_name = rest.split(".", 1)[0]
-                            candidate_classes.extend(hierarchy[1:])
-                        if method_name:
-                            for candidate_cls in candidate_classes:
-                                qualified = f"{candidate_cls.qualified_name}.{method_name}"
-                                fn_obj = function_by_qualified.get(qualified)
-                                if fn_obj is not None:
-                                    callee_id = fn_obj.id
-                                    break
-
-                # 3) Imported function via "from module import name".
-                if callee_id is None and target in func_imports:
-                    imported_module, original_name = func_imports[target]
-                    if imported_module:
-                        qualified = f"{imported_module}.{original_name}"
-                        fn_obj = function_by_qualified.get(qualified)
-                        if fn_obj is not None:
-                            callee_id = fn_obj.id
-
-                # 4) Module alias + attribute: alias.func
-                if callee_id is None and "." in target:
-                    prefix, rest = target.split(".", 1)
-                    if prefix in module_aliases:
-                        imported_module = module_aliases[prefix]
-                        func_name = rest.split(".", 1)[0]
-                        qualified = f"{imported_module}.{func_name}"
-                        fn_obj = function_by_qualified.get(qualified)
-                        if fn_obj is not None:
-                            callee_id = fn_obj.id
-
-                # 5) Direct class reference: ClassName.method
-                if callee_id is None and "." in target:
-                    class_expr, method_expr = target.rsplit(".", 1)
-                    cls = class_lookup.get(class_expr)
-                    if cls is not None:
-                        method_name = method_expr.split(".", 1)[0]
-                        qualified = f"{cls.qualified_name}.{method_name}"
-                        fn_obj = function_by_qualified.get(qualified)
-                        if fn_obj is not None:
-                            callee_id = fn_obj.id
+                callee = _resolve_call_target(target, fn)
 
                 call_edges.append(
                     CallEdgeIR(
                         caller_function_id=fn.id,
-                        callee_function_id=callee_id,
+                        callee_function_id=callee.id if callee else None,
                         lineno=call.lineno,
                         target=target,
+                        caller_symbol_id=fn.symbol_id,
+                        callee_symbol_id=callee.symbol_id if callee else None,
+                    )
+                )
+
+        # Module-level entry calls
+        module_call_list = module_extras.get(module.id, {}).get("module_calls", [])  # type: ignore[index]
+        entry_fn = next((f for f in module.functions if f.kind == "module"), None)
+        if entry_fn:
+            for call in module_call_list or []:
+                callee = _resolve_call_target(call.target, entry_fn)
+                entry_fn.calls.append(call)
+                call_edges.append(
+                    CallEdgeIR(
+                        caller_function_id=entry_fn.id,
+                        callee_function_id=callee.id if callee else None,
+                        lineno=call.lineno,
+                        target=call.target,
+                        caller_symbol_id=entry_fn.symbol_id,
+                        callee_symbol_id=callee.symbol_id if callee else None,
                     )
                 )
 
@@ -484,3 +606,16 @@ def build_repository_ir(root: Path) -> RepositoryIR:
         module_import_edges=module_import_edges,
         call_edges=call_edges,
     )
+def _make_symbol_id(module: str, qualname: str) -> str:
+    return f"{module}:{qualname}"
+
+
+def _is_main_guard(node: ast.AST) -> bool:
+    if isinstance(node, ast.Compare):
+        left = node.left
+        comparators = node.comparators
+        if isinstance(left, ast.Name) and left.id == "__name__" and comparators:
+            right = comparators[0]
+            if isinstance(right, ast.Constant) and right.value == "__main__":
+                return True
+    return False
