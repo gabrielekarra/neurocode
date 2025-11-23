@@ -3,18 +3,19 @@ import sys
 from pathlib import Path
 
 from .check import check_file_from_disk
-from .embedding_model import (
-    EmbeddingItem,
-    EmbeddingStore,
-    load_embedding_store,
-    save_embedding_store,
-)
+from .embedding_model import EmbeddingItem, EmbeddingStore, load_embedding_store, save_embedding_store
 from .embedding_provider import DummyEmbeddingProvider, EmbeddingProvider
 from .embedding_text import build_embedding_documents
 from .explain import explain_file_from_disk
 from .ir_build import build_repository_ir, compute_file_hash
 from .patch import apply_patch_from_disk
 from .query import QueryError, render_query_result, run_query
+from .search import (
+    build_query_embedding_from_symbol,
+    build_query_embedding_from_text,
+    load_ir_and_embeddings,
+    search_embeddings,
+)
 from .status import status_from_disk
 from .toon_parse import load_repository_ir
 from .toon_serialize import repository_ir_to_toon
@@ -216,6 +217,53 @@ def main() -> None:
         default="text",
         help="Output format (default: text)",
     )
+
+    search_parser = subparsers.add_parser(
+        "search", help="Semantic search over embeddings stored in .neurocode/ir-embeddings.toon"
+    )
+    search_parser.add_argument(
+        "path",
+        nargs="?",
+        default=".",
+        help="Path to the repository root containing .neurocode (default: current directory)",
+    )
+    query_group = search_parser.add_mutually_exclusive_group(required=True)
+    query_group.add_argument(
+        "--text",
+        help="Text query to search for similar functions",
+    )
+    query_group.add_argument(
+        "--like",
+        help="Find functions similar to this symbol (e.g., package.module:func)",
+    )
+    search_parser.add_argument(
+        "--k",
+        type=int,
+        default=10,
+        help="Number of results to return (default: 10)",
+    )
+    search_parser.add_argument(
+        "--module",
+        dest="module_filter",
+        help="Restrict results to a module/package (prefix match)",
+    )
+    search_parser.add_argument(
+        "--provider",
+        default="dummy",
+        help="Embedding provider to use for text queries (default: dummy)",
+    )
+    search_parser.add_argument(
+        "--model",
+        default=None,
+        help="Expected embedding model; if set and differs from the store, search fails",
+    )
+    search_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "ir":
@@ -458,6 +506,76 @@ def main() -> None:
         except Exception as exc:  # pragma: no cover - defensive
             print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
             sys.exit(1)
+    elif args.command == "search":
+        repo_path = Path(args.path).resolve()
+        try:
+            ir, store = load_ir_and_embeddings(repo_path)
+            requested_model = args.model
+            if requested_model and store.model and store.model != requested_model:
+                msg = (
+                    f"[neurocode] error: embedding store model '{store.model}' "
+                    f"does not match requested '{requested_model}'"
+                )
+                print(msg, file=sys.stderr)
+                sys.exit(1)
+
+            provider: EmbeddingProvider | None = None
+            if args.text:
+                if args.provider != "dummy":
+                    print(f"[neurocode] error: unknown provider: {args.provider}", file=sys.stderr)
+                    sys.exit(1)
+                provider = DummyEmbeddingProvider()
+                query_embedding = build_query_embedding_from_text(args.text, provider=provider)
+                query_type = "text"
+                query_value = args.text
+            else:
+                query_embedding = build_query_embedding_from_symbol(store, args.like)
+                query_type = "like"
+                query_value = args.like
+
+            results = search_embeddings(
+                repository_ir=ir,
+                embedding_store=store,
+                query_embedding=query_embedding,
+                module_filter=args.module_filter,
+                k=args.k,
+            )
+
+            if args.format == "json":
+                import json
+
+                payload = {
+                    "query_type": query_type,
+                    "query": query_value,
+                    "k": args.k,
+                    "results": [
+                        {
+                            "id": r.id,
+                            "kind": r.kind,
+                            "module": r.module,
+                            "name": r.name,
+                            "file": r.file,
+                            "lineno": r.lineno,
+                            "signature": r.signature,
+                            "score": r.score,
+                        }
+                        for r in results
+                    ],
+                }
+                print(json.dumps(payload, indent=2))
+            else:
+                header = f"[neurocode] search ({query_type}) k={args.k}"
+                print(header)
+                for r in results:
+                    print(f"{r.score:.3f} {r.module}:{r.name} ({r.file}:{r.lineno}) {r.signature}")
+            sys.exit(0)
+        except RuntimeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"[neurocode] unexpected error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
     elif args.command == "status":
         repo_path = Path(args.path).resolve()
         output, exit_code = status_from_disk(repo_path, output_format=args.format)
