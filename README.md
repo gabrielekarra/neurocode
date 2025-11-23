@@ -74,6 +74,7 @@ neurocode patch path/to/file.py --fix "describe fix" --strategy guard --show-dif
   - Idempotent via `# neurocode:*` markers; exit code `3` when no change. `--format json` emits structured result (status, diff, warnings, exit_code).
 - `neurocode status [path] [--format text|json]` — summarize IR freshness (hash comparison), build timestamp, and config values in one shot; exit `1` if any module is stale/missing.
 - `neurocode query <path> --kind callers|callees|fan-in|fan-out [--symbol ...] [--module ...] [--format text|json]` — IR-backed structural queries (callers/callees and fan-in/out counts).
+- `neurocode embed <path> [--provider dummy] [--model dummy-embedding-v0] [--update] [--format text|json]` — build Neural IR embeddings and store them in `.neurocode/ir-embeddings.toon`.
 
 ### Examples
 
@@ -108,7 +109,20 @@ neurocode patch path/to/file.py --fix "describe fix" --strategy guard --dry-run 
 
 # 6) Query structure (callers)
 neurocode query . --kind callers --symbol package.mod_b.helper_value --format json | jq .
+
+# 7) Build embeddings
+neurocode embed . --provider dummy --format text
 ```
+
+### Neural IR (Embeddings)
+
+NeuroCode can serialize embeddings for IR entities to a TOON store (`.neurocode/ir-embeddings.toon`) for downstream semantic search and agent reasoning.
+
+Examples:
+- `neurocode embed .`
+- `neurocode embed . --provider dummy --format json`
+
+Embeddings are written in TOON format (no JSON storage) and can be refreshed with `--update`.
 
 Custom config example:
 ```toml
