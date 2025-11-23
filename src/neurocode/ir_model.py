@@ -92,6 +92,7 @@ class ModuleIR:
     file_hash: str | None = None
     has_main_guard: bool = False
     entry_symbol_id: str | None = None
+    entrypoints: List[str] = field(default_factory=list)
     classes: List[ClassIR] = field(default_factory=list)
     imports: List[ImportIR] = field(default_factory=list)
     functions: List[FunctionIR] = field(default_factory=list)
@@ -111,6 +112,9 @@ class RepositoryIR:
     modules: List[ModuleIR] = field(default_factory=list)
     module_import_edges: List[ModuleImportEdgeIR] = field(default_factory=list)
     call_edges: List[CallEdgeIR] = field(default_factory=list)
+    test_mappings: List[tuple[str, str]] = field(default_factory=list)  # (test_symbol_id, target_symbol_id)
+    config_paths: List[str] = field(default_factory=list)
+    console_scripts: List[tuple[str, str]] = field(default_factory=list)  # (name, target_symbol)
 
     @property
     def num_modules(self) -> int:

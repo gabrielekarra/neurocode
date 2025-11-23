@@ -17,6 +17,7 @@ from .ir_model import (
     ModuleIR,
     RepositoryIR,
 )
+from .pyproject import load_console_scripts
 
 
 def discover_python_files(root: Path) -> List[Path]:
@@ -597,6 +598,16 @@ def build_repository_ir(root: Path) -> RepositoryIR:
                     )
                 )
 
+    # Entry points from pyproject
+    console_scripts = load_console_scripts(root)
+    for name, target in console_scripts:
+        # target in form module:function
+        if ":" in target:
+            mod, func = target.split(":", 1)
+            symbol_id = _make_symbol_id(mod.replace("/", ".").replace("\\", "."), func)
+            for module in modules:
+                module.entrypoints.append(symbol_id)
+
     build_timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     return RepositoryIR(
@@ -605,6 +616,8 @@ def build_repository_ir(root: Path) -> RepositoryIR:
         modules=modules,
         module_import_edges=module_import_edges,
         call_edges=call_edges,
+        config_paths=["pyproject.toml"] if (root / "pyproject.toml").is_file() else [],
+        console_scripts=console_scripts,
     )
 def _make_symbol_id(module: str, qualname: str) -> str:
     return f"{module}:{qualname}"
