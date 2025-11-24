@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+- Added `tomli` fallback for Python 3.10 and declared dependency to keep config loading working on older runtimes.
+- `build_ir` now checks IR freshness and rebuilds stale snapshots instead of returning outdated data.
+- Version bumped to 0.2.0 for release.
+
 ## 0.1.2
 - Renamed PyPI distribution to `neurocode-ai` (CLI entrypoint remains `neurocode`); update install docs accordingly.
 
