@@ -126,6 +126,15 @@ neurocode plan-patch-llm path/to/file.py --fix "Add logging" --symbol package.mo
 neurocode patch path/to/file.py --plan plan_filled.json --show-diff
 ```
 
+### Demo (bundled sample repo)
+See `docs/demo.md` for a short, reproducible walkthrough (IR → status → explain-llm with signatures/docstrings → plan-patch-llm → embeddings/search) against `tests/data/sample_repo`.
+
+### Agent/Editor integration
+See `docs/agents.md` for LangChain tool helpers (`make_langchain_tools`) and CLI touchpoints editors can shell out to.
+For VS Code, see `docs/vscode.md` for a minimal command that calls `neurocode explain-llm` and shows JSON in-editor.
+
+CI builds a VS Code sample `.vsix` on pushes touching the sample or docs (`.github/workflows/vscode-sample.yml`), and tagged pushes run `release.yml` to package/upload a `.vsix` artifact (`examples/vscode-neurocode`, versioned).
+
 ### Patch History
 
 NeuroCode records applied patches (non-dry-run) in TOON format at `.neurocode/patch-history.toon`. View recent entries:

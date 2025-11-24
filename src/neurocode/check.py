@@ -55,6 +55,11 @@ def check_file_from_disk(
 
     ir_file = repo_root / ".neurocode" / "ir.toon"
     ir = load_repository_ir(ir_file)
+    if Path(getattr(ir, "root", repo_root)).resolve() != repo_root:
+        raise RuntimeError(
+            f"IR at {ir_file} was built for a different repository root ({ir.root}); "
+            "rerun `neurocode ir` in this repository."
+        )
     module = _find_module_for_file(ir, repo_root, file)
     if module is None:
         raise RuntimeError(

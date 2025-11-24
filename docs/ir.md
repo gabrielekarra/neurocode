@@ -37,6 +37,8 @@ This document summarizes the serialized IR stored in `.neurocode/ir.toon`. The T
 - `module_id` (int)
 - `name` (str)
 - `qualified_name` (str)
+- `signature` (str) – best-effort rendered signature including annotations/defaults
+- `docstring` (str|empty)
 - `lineno` (int)
 - `parent_class_id` (int|empty)
 - `parent_class_qualified_name` (str|empty)

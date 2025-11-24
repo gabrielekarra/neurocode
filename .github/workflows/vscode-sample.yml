@@ -1,0 +1,29 @@
+name: VSCode Sample Package
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "examples/vscode-neurocode/**"
+      - "docs/vscode.md"
+
+jobs:
+  build-vsix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps
+        working-directory: examples/vscode-neurocode
+        run: npm install
+      - name: Package VSIX
+        working-directory: examples/vscode-neurocode
+        run: npm run package
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neurocode-vscode-sample-vsix
+          path: examples/vscode-neurocode/*.vsix

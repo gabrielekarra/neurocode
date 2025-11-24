@@ -156,6 +156,8 @@ class _IRVisitor(ast.NodeVisitor):
 
         name = node.name  # type: ignore[attr-defined]
         class_names = [ctx.class_ir.name for ctx in self._class_stack]
+        signature = _render_function_signature(self.module_name, class_names, name, node)
+        docstring = ast.get_docstring(node)
         if class_names:
             qualified_name = ".".join([self.module_name, *class_names, name])
             qualname = ".".join([*class_names, name])
@@ -182,6 +184,8 @@ class _IRVisitor(ast.NodeVisitor):
             lineno=node.lineno,  # type: ignore[attr-defined]
             parent_class_id=parent_class_id,
             parent_class_qualified_name=parent_class_qualified,
+            signature=signature,
+            docstring=docstring,
         )
         if self._class_stack:
             self._class_stack[-1].class_ir.methods.append(fn_ir)
@@ -270,6 +274,68 @@ def render_base_name(node: ast.AST) -> str:
     if "[" in value:
         value = value.split("[", 1)[0]
     return value
+
+
+def _safe_unparse(node: ast.AST | None) -> str:
+    if node is None:
+        return ""
+    try:
+        return ast.unparse(node)
+    except Exception:  # pragma: no cover - defensive
+        return ""
+
+
+def _render_param(arg: ast.arg, default: ast.AST | None = None, *, prefix: str = "") -> str:
+    name = f"{prefix}{arg.arg}"
+    ann = _safe_unparse(arg.annotation) if getattr(arg, "annotation", None) is not None else ""
+    if ann:
+        name += f": {ann}"
+    if default is not None:
+        default_text = _safe_unparse(default)
+        name += f"={default_text}" if default_text else "="
+    return name
+
+
+def _render_arguments(args: ast.arguments) -> str:
+    parts: List[str] = []
+
+    positional = list(args.posonlyargs) + list(args.args)
+    num_defaults = len(args.defaults)
+    default_start = len(positional) - num_defaults if num_defaults <= len(positional) else len(positional)
+    for idx, arg in enumerate(positional):
+        default_node = None
+        if idx >= default_start and num_defaults:
+            default_node = args.defaults[idx - default_start]
+        parts.append(_render_param(arg, default_node))
+    if args.posonlyargs:
+        parts.insert(len(args.posonlyargs), "/")
+
+    if args.vararg:
+        parts.append(_render_param(args.vararg, prefix="*"))
+
+    if args.kwonlyargs:
+        if not args.vararg:
+            parts.append("*")
+        for kw_arg, default in zip(args.kwonlyargs, args.kw_defaults):
+            default_node = default if default is not None else None
+            parts.append(_render_param(kw_arg, default_node))
+
+    if args.kwarg:
+        parts.append(_render_param(args.kwarg, prefix="**"))
+
+    return ", ".join(part for part in parts if part)
+
+
+def _render_function_signature(module: str, class_names: List[str], name: str, node: ast.AST) -> str:
+    prefix = "async def" if isinstance(node, ast.AsyncFunctionDef) else "def"
+    qual = ".".join([module, *class_names, name]) if class_names else f"{module}.{name}"
+    args_text = _render_arguments(node.args) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else ""
+    ret = ""
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and getattr(node, "returns", None) is not None:
+        ret_text = _safe_unparse(node.returns)
+        if ret_text:
+            ret = f" -> {ret_text}"
+    return f"{prefix} {qual}({args_text}){ret}"
 
 
 def build_repository_ir(root: Path) -> RepositoryIR:
@@ -361,6 +427,7 @@ def build_repository_ir(root: Path) -> RepositoryIR:
             module_id=module.id,
             name="<module>",
             qualified_name=f"{module.module_name}.<module>",
+            signature=f"def {module.module_name}.<module>()",
             lineno=1,
             module=module.module_name,
             qualname="<module>",
