@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.1
+- Correct package metadata to report version 0.2.1 and align code/docs with the published release.
+
 ## 0.2.0
 - Added `tomli` fallback for Python 3.10 and declared dependency to keep config loading working on older runtimes.
 - `build_ir` now checks IR freshness and rebuilds stale snapshots instead of returning outdated data.

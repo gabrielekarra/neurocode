@@ -153,7 +153,7 @@ Sample bundle (truncated):
 ```json
 {
   "version": 1,
-  "engine_version": "0.1.2",
+  "engine_version": "0.2.1",
   "repo_root": "/abs/repo",
   "file": "package/mod_a.py",
   "module": "package.mod_a",
@@ -315,7 +315,7 @@ The CLI uses the same underlying functions; see `docs/ir.md` for the serialized 
 
 ## Releases
 
-- Version: `0.1.2` (see `CHANGELOG.md`).
+- Version: `0.2.1` (see `CHANGELOG.md`).
 - Build artifacts locally with `scripts/release.sh` (wheel + sdist in `dist/`); `make release` wraps it.
 - CI: GitHub Actions (`.github/workflows/ci.yml`) runs `ruff check` + `pytest` on push/PR.
 - Compatibility: Python 3.10–3.12 (see classifiers). No third-party runtime dependencies; dev tooling pinned in `[project.optional-dependencies]`.
