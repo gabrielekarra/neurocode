@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable, List
 
-from .api import NeurocodeProject, PatchApplyResult, PatchPlan, open_project
+from .api import PatchApplyResult, PatchPlan, open_project
 
 
 class AgentToolsError(RuntimeError):
