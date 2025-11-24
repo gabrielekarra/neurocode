@@ -233,6 +233,8 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
         kind = _unescape_value(row.get("kind", "function"))
         is_entrypoint = row.get("is_entrypoint", "0") == "1"
         lineno = int(row["lineno"])
+        signature = _unescape_value(row.get("signature", ""))
+        docstring = _unescape_value(row.get("docstring", ""))
 
         parent_class_raw = row.get("parent_class_id", "")
         parent_class_id = int(parent_class_raw) if parent_class_raw not in {"", None} else None
@@ -258,6 +260,8 @@ def repository_ir_from_toon(text: str) -> RepositoryIR:
             is_entrypoint=is_entrypoint,
             parent_class_id=parent_class_id,
             parent_class_qualified_name=parent_class_qualified_name,
+            signature=signature,
+            docstring=docstring or None,
         )
         if not fn.symbol_id:
             fn.symbol_id = f"{fn.module}:{fn.qualname}"

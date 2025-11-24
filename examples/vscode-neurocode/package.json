@@ -1,0 +1,71 @@
+{
+  "name": "neurocode-vscode-sample",
+  "displayName": "NeuroCode Sample",
+  "description": "Sample VS Code integration that shells out to neurocode explain-llm and plan-patch-llm.",
+  "publisher": "local",
+  "version": "0.0.2",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "activationEvents": [
+    "onCommand:neurocode.explainCurrent",
+    "onCommand:neurocode.planCurrent",
+    "onCommand:neurocode.applyPlanFromEditor"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "package": "vsce package"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "neurocode.explainCurrent",
+        "title": "NeuroCode: Explain Current File"
+      },
+      {
+        "command": "neurocode.planCurrent",
+        "title": "NeuroCode: Plan Patch for Current File"
+      },
+      {
+        "command": "neurocode.applyPlanFromEditor",
+        "title": "NeuroCode: Apply Patch Plan from Editor JSON"
+      }
+    ],
+    "configuration": {
+      "title": "NeuroCode",
+      "properties": {
+        "neurocode.cliPath": {
+          "type": "string",
+          "default": "neurocode",
+          "description": "Path to the neurocode CLI."
+        },
+        "neurocode.workspaceRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Override workspace root used for CLI cwd. Defaults to first workspace folder."
+        },
+        "neurocode.tasks.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Contribute NeuroCode tasks for rebuilding IR/embeddings."
+        }
+      }
+    },
+    "taskDefinitions": [
+      {
+        "type": "neurocode",
+        "required": ["command"],
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "neurocode command (ir | embed | status)."
+          }
+        }
+      }
+    ]
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@vscode/vsce": "^3.0.0"
+  }
+}

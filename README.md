@@ -126,6 +126,15 @@ neurocode plan-patch-llm path/to/file.py --fix "Add logging" --symbol package.mo
 neurocode patch path/to/file.py --plan plan_filled.json --show-diff
 ```
 
+### Demo (bundled sample repo)
+See `docs/demo.md` for a short, reproducible walkthrough (IR → status → explain-llm with signatures/docstrings → plan-patch-llm → embeddings/search) against `tests/data/sample_repo`.
+
+### Agent/Editor integration
+See `docs/agents.md` for LangChain tool helpers (`make_langchain_tools`) and CLI touchpoints editors can shell out to.
+For VS Code, see `docs/vscode.md` for a minimal command that calls `neurocode explain-llm` and shows JSON in-editor.
+
+CI builds a VS Code sample `.vsix` on pushes touching the sample or docs (`.github/workflows/vscode-sample.yml`), and tagged pushes run `release.yml` to package/upload a `.vsix` artifact (`examples/vscode-neurocode`, versioned).
+
 ### Patch History
 
 NeuroCode records applied patches (non-dry-run) in TOON format at `.neurocode/patch-history.toon`. View recent entries:
@@ -153,7 +162,7 @@ Sample bundle (truncated):
 ```json
 {
   "version": 1,
-  "engine_version": "0.1.2",
+  "engine_version": "0.2.1",
   "repo_root": "/abs/repo",
   "file": "package/mod_a.py",
   "module": "package.mod_a",
@@ -315,7 +324,7 @@ The CLI uses the same underlying functions; see `docs/ir.md` for the serialized 
 
 ## Releases
 
-- Version: `0.1.2` (see `CHANGELOG.md`).
+- Version: `0.2.1` (see `CHANGELOG.md`).
 - Build artifacts locally with `scripts/release.sh` (wheel + sdist in `dist/`); `make release` wraps it.
 - CI: GitHub Actions (`.github/workflows/ci.yml`) runs `ruff check` + `pytest` on push/PR.
 - Compatibility: Python 3.10–3.12 (see classifiers). No third-party runtime dependencies; dev tooling pinned in `[project.optional-dependencies]`.

@@ -126,13 +126,15 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
 
     all_functions = [fn for m in ir.modules for fn in m.functions]
     lines.append(
-        "functions[{n}]{{function_id,module_id,name,qualified_name,module,qualname,symbol_id,kind,is_entrypoint,lineno,parent_class_id,parent_class_qualified_name,num_calls}}:".format(
+        "functions[{n}]{{function_id,module_id,name,qualified_name,module,qualname,symbol_id,kind,is_entrypoint,lineno,parent_class_id,parent_class_qualified_name,num_calls,signature,docstring}}:".format(
             n=len(all_functions)
         )
     )
     for fn in all_functions:
         parent_class_id = "" if fn.parent_class_id is None else str(fn.parent_class_id)
         parent_class_name = _escape_value(fn.parent_class_qualified_name or "")
+        signature = _escape_value(getattr(fn, "signature", ""))
+        docstring = _escape_value(getattr(fn, "docstring", "") or "")
         row = ",".join(
             [
                 str(fn.id),
@@ -148,6 +150,8 @@ def repository_ir_to_toon(ir: RepositoryIR) -> str:
                 parent_class_id,
                 parent_class_name,
                 str(len(fn.calls)),
+                signature,
+                docstring,
             ]
         )
         lines.append(f"  {row}")

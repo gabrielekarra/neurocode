@@ -57,6 +57,8 @@ class FunctionIR:
     name: str
     qualified_name: str
     lineno: int
+    signature: str = ""
+    docstring: str | None = None
     module: str = ""
     qualname: str = ""
     symbol_id: str = ""

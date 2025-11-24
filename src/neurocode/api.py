@@ -163,8 +163,9 @@ class NeurocodeProject:
         ir_path.parent.mkdir(parents=True, exist_ok=True)
         if ir_path.exists() and not force:
             ir = load_repository_ir(ir_path)
-            statuses = _compute_module_status(ir)
-            if all(st.status == "fresh" for st in statuses):
+            root_mismatch = Path(getattr(ir, "root", self.repo_root)).resolve() != self.repo_root
+            statuses = _compute_module_status(ir) if not root_mismatch else []
+            if not root_mismatch and all(st.status == "fresh" for st in statuses):
                 return BuildIRResult(
                     repo_root=self.repo_root,
                     ir_path=ir_path,
@@ -174,6 +175,8 @@ class NeurocodeProject:
                     fresh=True,
                 )
         ir = build_repository_ir(self.repo_root)
+        # Ensure the serialized root reflects the current repo location (e.g., when a copy is made).
+        ir.root = self.repo_root
         ir_path.write_text(repository_ir_to_toon(ir), encoding="utf-8")
         statuses = _compute_module_status(ir)
         return BuildIRResult(
