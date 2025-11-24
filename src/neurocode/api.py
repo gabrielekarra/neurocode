@@ -163,23 +163,26 @@ class NeurocodeProject:
         ir_path.parent.mkdir(parents=True, exist_ok=True)
         if ir_path.exists() and not force:
             ir = load_repository_ir(ir_path)
-            return BuildIRResult(
-                repo_root=self.repo_root,
-                ir_path=ir_path,
-                modules=ir.num_modules,
-                functions=ir.num_functions,
-                calls=ir.num_calls,
-                fresh=True,
-            )
+            statuses = _compute_module_status(ir)
+            if all(st.status == "fresh" for st in statuses):
+                return BuildIRResult(
+                    repo_root=self.repo_root,
+                    ir_path=ir_path,
+                    modules=ir.num_modules,
+                    functions=ir.num_functions,
+                    calls=ir.num_calls,
+                    fresh=True,
+                )
         ir = build_repository_ir(self.repo_root)
         ir_path.write_text(repository_ir_to_toon(ir), encoding="utf-8")
+        statuses = _compute_module_status(ir)
         return BuildIRResult(
             repo_root=self.repo_root,
             ir_path=ir_path,
             modules=ir.num_modules,
             functions=ir.num_functions,
             calls=ir.num_calls,
-            fresh=False,
+            fresh=all(st.status == "fresh" for st in statuses),
         )
 
     def status(self) -> StatusResult:

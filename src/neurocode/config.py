@@ -4,7 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Set
 
-import tomllib
+try:  # Python 3.11+ stdlib
+    import tomllib  # type: ignore[assignment]
+except ModuleNotFoundError:  # pragma: no cover - exercised on 3.10
+    import tomli as tomllib  # type: ignore[assignment]
 
 
 @dataclass

@@ -46,3 +46,20 @@ def test_api_apply_patch_plan(repo_with_ir: Path, tmp_path: Path) -> None:
         op["code"] = "# patched"
     result = project.apply_patch_plan(plan, dry_run=True)
     assert "# patched" in result.diff
+
+
+def test_build_ir_rebuilds_stale(sample_repo: Path) -> None:
+    project = NeurocodeProject(sample_repo)
+    first = project.build_ir()
+    ir_path = sample_repo / ".neurocode" / "ir.toon"
+    original_text = ir_path.read_text()
+
+    target_file = sample_repo / "package" / "mod_a.py"
+    target_file.write_text(target_file.read_text() + "\n# change\n")
+
+    second = project.build_ir()
+    updated_text = ir_path.read_text()
+
+    assert first.fresh
+    assert second.fresh
+    assert updated_text != original_text
