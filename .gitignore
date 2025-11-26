@@ -8,6 +8,9 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+vscode-extension/node_modules/*
+vscode-extension/out/*
+vscode-extension/.vscode/*
 
 # Editor/OS
 .DS_Store

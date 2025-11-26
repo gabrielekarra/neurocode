@@ -1,0 +1,7 @@
+node_modules
+.git
+src
+tsconfig.json
+package-lock.json
+tsconfig*.json
+**/*.ts
