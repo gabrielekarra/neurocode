@@ -1,0 +1,58 @@
+{
+  "name": "neurocode-vscode",
+  "displayName": "NeuroCode",
+  "description": "NeuroCode VS Code integration - explain Python symbols using the local NeuroCode server.",
+  "version": "0.0.1",
+  "publisher": "neurocode",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "onLanguage:python",
+    "onCommand:neurocode.explainHere",
+    "onCommand:neurocode.explainFile",
+    "onCommand:neurocode.analyzeFileIssues",
+    "onCommand:neurocode.suggestFixesForFile",
+    "onCommand:neurocode.suggestFixesForSymbol"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "neurocode.explainHere",
+        "title": "NeuroCode: Explain symbol here"
+      },
+      {
+        "command": "neurocode.explainFile",
+        "title": "NeuroCode: Explain this file"
+      },
+      {
+        "command": "neurocode.analyzeFileIssues",
+        "title": "NeuroCode: Analyze issues in this file"
+      },
+      {
+        "command": "neurocode.suggestFixesForFile",
+        "title": "NeuroCode: Suggest fixes for this file"
+      },
+      {
+        "command": "neurocode.suggestFixesForSymbol",
+        "title": "NeuroCode: Suggest fixes for this symbol"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.11"
+  },
+  "devDependencies": {
+    "@types/node": "^18.17.0",
+    "@types/node-fetch": "^2.6.4",
+    "@types/vscode": "^1.84.0",
+    "typescript": "^5.4.0"
+  }
+}
