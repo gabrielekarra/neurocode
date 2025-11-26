@@ -11,6 +11,9 @@ readme = "README.md"
 license = { text = "Apache-2.0" }
 dependencies = [
   "tomli>=2.0.1; python_version < '3.11'",
+  "openai>=1.0.0",
+  "fastapi>=0.112.0",
+  "uvicorn>=0.30.0",
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",

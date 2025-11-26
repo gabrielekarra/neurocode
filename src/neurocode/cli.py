@@ -298,6 +298,26 @@ def main() -> None:
         help="Output format (default: json)",
     )
 
+    serve_parser = subparsers.add_parser(
+        "serve", help="Start the NeuroCode HTTP server exposing LLM explain endpoints"
+    )
+    serve_parser.add_argument(
+        "--project-root",
+        default=".",
+        help="Project root to serve (default: current directory)",
+    )
+    serve_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host interface to bind (default: 127.0.0.1)",
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=8787,
+        help="Port to bind (default: 8787)",
+    )
+
     plan_patch_parser = subparsers.add_parser(
         "plan-patch-llm", help="Build an LLM-ready patch plan bundle for a file"
     )
@@ -688,6 +708,18 @@ def main() -> None:
             for op in ops:
                 print(f"- {op.get('id')}: {op.get('op')} @ {op.get('file')}:{op.get('lineno')}")
         sys.exit(0)
+    elif args.command == "serve":
+        project_root = Path(args.project_root).resolve()
+        if not project_root.exists():
+            print(f"[neurocode] error: project root does not exist: {project_root}", file=sys.stderr)
+            sys.exit(1)
+        try:
+            from .server import serve as run_server
+
+            run_server(project_root, host=args.host, port=args.port)
+        except RuntimeError as exc:
+            print(f"[neurocode] error: {exc}", file=sys.stderr)
+            sys.exit(1)
     elif args.command == "status":
         repo_path = Path(args.path).resolve()
         output, exit_code = status_from_disk(repo_path, output_format=args.format)
